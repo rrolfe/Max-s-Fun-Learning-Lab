@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-asset-layout="flat">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#061b36"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Max's Lab">
 <meta name="description" content="A little lab for a big imagination. Explore family places, discover the world, and learn through play. English / Español.">
 <title>Max's Learning Lab</title>
-<link rel="icon" href="assets/ui/max-emblem.png" type="image/png"><link rel="apple-touch-icon" href="assets/ui/max-emblem.png"><link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="ui/max-emblem.png" type="image/png"><link rel="apple-touch-icon" href="ui/max-emblem.png"><link rel="manifest" href="manifest.webmanifest?v=4.2-family-note">
 <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="map.css"><link rel="stylesheet" href="practice.css?v=4">
 <style>
 .site-header{gap:14px}.header-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}.language-toggle{display:flex;gap:2px;padding:3px;border:1px solid #63827d;border-radius:12px;background:#fff9ed}.language-toggle button{min-height:44px;padding:9px 12px;font-size:13px;font-weight:700;border-radius:8px;background:transparent;color:#d2e4de;white-space:nowrap}.language-toggle button[aria-pressed=true]{background:#9ce3bf;color:#123b31}.site-header nav{gap:3px}.site-header nav a{padding-left:12px;padding-right:12px}.brand small{max-width:164px;line-height:1.4;letter-spacing:.09em}.brand{flex-shrink:0}.credits-grid article{padding:24px 0;border-top:1px solid #57747b;display:grid;grid-template-columns:130px 1fr;gap:24px}.credits-grid img{width:130px;height:110px;object-fit:contain;background:#163640;border-radius:9px}.credits-grid h2{font-size:1.35rem}.credits-grid p,.credits-grid li{font-size:.92rem;line-height:1.6}.credits-grid a{overflow-wrap:anywhere}.credits-grid ul{padding-left:20px}.game-source-links a{overflow-wrap:anywhere}.game-stat-label{overflow-wrap:anywhere}
@@ -17,12 +17,12 @@ html[lang=es] .module-card .eyebrow{letter-spacing:.08em}html[lang=es] .game-bas
 </style>
 <link rel="stylesheet" href="theme.css?v=4"><link rel="stylesheet" href="wordsearch.css?v=4"><link rel="stylesheet" href="spy.css?v=4"><link rel="stylesheet" href="draw.css?v=4">
 <link rel="stylesheet" href="discovery.css?v=4">
-<script src="data/config.js" defer></script><script src="data/family.js" defer></script><script src="data/places-a.js" defer></script><script src="data/places-b.js" defer></script><script src="data/people.js" defer></script><script src="data/photos.js" defer></script><script src="data/people-expanded.js?v=4" defer></script><script src="data/art.js?v=4" defer></script><script src="data/discoveries.js?v=4" defer></script><script src="app.js?v=4-discovery" defer></script>
+<script src="data/config.js" defer></script><script src="data/family.js" defer></script><script src="data/places-a.js" defer></script><script src="data/places-b.js" defer></script><script src="data/people.js" defer></script><script src="data/photos.js" defer></script><script src="data/people-expanded.js?v=4" defer></script><script src="data/art.js?v=4" defer></script><script src="data/discoveries.js?v=4" defer></script><script src="app.js?v=4.2-family-note" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#view" data-en="Skip to activity" data-es="Ir a la actividad">Skip to activity</a>
 <header class="site-header">
-<a href="#home" class="brand" data-aria-en="Learning Lab home" data-aria-es="Inicio del laboratorio" aria-label="Learning Lab home"><img class="brand-logo" src="assets/ui/max-emblem.png" width="54" height="54" alt=""><span><strong id="brand-name">MAX'S</strong><small data-en="LEARNING LAB" data-es="LABORATORIO DE APRENDIZAJE">LEARNING LAB</small></span></a>
+<a href="#home" class="brand" data-aria-en="Learning Lab home" data-aria-es="Inicio del laboratorio" aria-label="Learning Lab home"><img class="brand-logo" src="ui/max-emblem.png" width="54" height="54" alt=""><span><strong id="brand-name">MAX'S</strong><small data-en="LEARNING LAB" data-es="LABORATORIO DE APRENDIZAJE">LEARNING LAB</small></span></a>
 <nav aria-label="Main navigation" data-aria-en="Main navigation" data-aria-es="Navegación principal"><a href="#home" data-nav="home" data-en="Home" data-es="Inicio">Home</a><a href="#map" data-nav="map" data-en="World map" data-es="Mapa del mundo">World map</a><a href="#passport" data-nav="passport"><span data-en="My passport" data-es="Mi pasaporte">My passport</span> <span id="nav-count">0</span></a></nav>
 <div class="header-actions"><span id="header-points" class="header-points" aria-label="Learning points">★ 0</span><div class="language-toggle" role="group" aria-label="Language" data-aria-en="Language" data-aria-es="Idioma"><button type="button" data-language="en" lang="en" aria-pressed="true">English</button><button type="button" data-language="es" lang="es" aria-pressed="false">Español</button></div><button type="button" class="avatar-button" id="settings-button" aria-label="Personalize your lab" data-aria-en="Personalize your lab" data-aria-es="Personaliza tu laboratorio"><span id="avatar-symbol" aria-hidden="true">✦</span></button></div>
 </header>

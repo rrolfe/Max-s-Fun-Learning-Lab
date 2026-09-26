@@ -77,7 +77,7 @@ window.MLL_ES_FAMILY = [
       "Guayaquil está junto al río Guayas. El paseo a la orilla del río se llama Malecón.",
       "Hay 444 escalones para subir al faro del cerro Santa Ana. ¡Son MUCHÍSIMOS escalones!"
     ],
-    "familyNote": "¡Mamá es de Guayaquil! Tus abuelitos, tu tío, dos tías y cuatro primos viven allí. Pregúntale a Mamá cuál era su lugar favorito cuando era niña.",
+    "familyNote": "¡Mamá es de Guayaquil! Tus abuelitos, tíos, tías y primos viven allí. Pregúntale a Mamá cuál era su lugar favorito de niña y qué restaurante o comida le gusta más cuando vuelve a casa.",
     "stretch": {
       "question": "¿Por qué crees que la gente construiría una ciudad junto a un río?",
       "answer": "Los barcos pueden traer personas, comida y otras cosas que hacen falta. Un río puede conectar una ciudad con el mar."
@@ -4127,11 +4127,21 @@ window.MLL_ES_B = [
   const I = window.MLL_I18N, t = value => I.t(value), l = (en, es) => I.pick(en, es);
   const config = window.MLL_CONFIG;
   const english = {family:[...(window.MLL_PLACES_FAMILY||[]),...(window.MLL_FAMILY_EXTRA||[]),...(window.MLL_FAMILY_NEW||[])],a:window.MLL_PLACES_A||[],b:window.MLL_PLACES_B||[],people:[...(window.MLL_PEOPLE||[]).map(p=>({...p,...window.MLL_PEOPLE_EXTRA?.[p.id]})),...(window.MLL_MORE_PEOPLE_A||[]),...(window.MLL_MORE_PEOPLE_B||[]),...(window.MLL_MESSI||[])]};
+  // Update this family note without requiring another data-folder upload.
+  const guayaquilFamily = english.family.find(place=>place.id==='guayaquil');
+  if(guayaquilFamily)guayaquilFamily.familyNote="Mom is from Guayaquil! Your abuelitos, tíos, tías, and primos live there. Ask Mom about her favorite place from childhood and her favorite restaurant or food when she goes home.";
   const photos = {...window.MLL_PHOTOS,...window.MLL_MORE_PHOTOS,...window.MLL_FAMILY_EXTRA_PHOTOS,...window.MLL_FAMILY_NEW_PHOTOS,...window.MLL_CITY_PHOTOS_A,...window.MLL_CITY_PHOTOS_B,...window.MLL_MESSI_PHOTOS};
   const photoEs={...window.MLL_ES_PHOTO_ALT,...window.MLL_MORE_ES_PHOTO_ALT,...window.MLL_FAMILY_EXTRA_ES_PHOTO_ALT,...window.MLL_FAMILY_NEW_ES_ALT,...window.MLL_CITY_ES_ALT_A,...window.MLL_CITY_ES_ALT_B,...window.MLL_MESSI_ES_PHOTO_ALT};
   const art=[...(window.MLL_ART_A||[]),...(window.MLL_ART_B||[])];
   const validTasks=new Set([...Array.from({length:40},(_,i)=>'spy:'+String(i+1).padStart(3,'0')),...['en','es'].flatMap(lang=>Array.from({length:100},(_,i)=>'wordsearch:'+lang+':'+String(i+1).padStart(3,'0'))),...art.map(a=>'draw:'+a.id)]);
   const galleries={...window.MLL_GALLERY_A,...window.MLL_GALLERY_B,...window.MLL_GALLERY_C};
+  // Match the public repository's top-level photo folders.
+  // The layout flag keeps the original assets/ layout compatible too.
+  if(document.documentElement.dataset.assetLayout==='flat'){
+    for(const photo of [...Object.values(photos),...Object.values(galleries).flat()]){
+      if(photo && typeof photo.src==='string')photo.src=photo.src.replace(/^assets\//,'');
+    }
+  }
   let family=[],surprises=[],nature=[],places=[],people=[],byId=new Map();
   function localizeRecords(original,translated){const lookup=new Map((translated||[]).map(p=>[p.id,p]));return original.map(p=>I.lang==='es'?{...p,...(lookup.get(p.id)||{})}:p);}
   function loadContent(){
