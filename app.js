@@ -3265,14 +3265,24 @@ window.MLL_ES_B = [
     const heading=node('header','practice-heading');heading.append(node('p','practice-eyebrow',pick('THE PRACTICE LAB','EL LABORATORIO DE PRÁCTICA')),node('h1','',pick(...title)),node('p','practice-intro',pick(...description)));
     const stage=node('div','practice-stage');root.append(back,heading,stage);host.replaceChildren(root);
     function has(id){return localAwards.has(id)||!!api.hasAnswer?.(id);}
-    function credit(id){if(has(id))return false;const earned=api.answer?!!api.answer(id):true;localAwards.add(id);if(earned)roundPoints+=10;return earned;}
-    function earnText(earned){return earned?pick('+10 learning points!','¡+10 puntos de aprendizaje!'):pick('Already in your score. Great practice!','Ya está en tu marcador. ¡Buena práctica!');}
+    function credit(id){if(has(id))return false;const earned=api.answer?!!api.answer(id):true;localAwards.add(id);if(earned)roundPoints+=1;return earned;}
+    function earnText(earned){return earned?pick('+1 learning point!','¡+1 punto de aprendizaje!'):pick('Already in your score. Great practice!','Ya está en tu marcador. ¡Buena práctica!');}
     function feedback(){const p=node('p','practice-feedback');p.setAttribute('role','status');p.setAttribute('aria-live','polite');return p;}
     function progress(index,total,label){const row=node('div','practice-progress');row.append(node('strong','',pick(label||'Your discovery','Tu descubrimiento')+' '+(index+1)+' / '+total));const dots=node('span','practice-dots');dots.setAttribute('aria-hidden','true');for(let i=0;i<total;i++)dots.append(node('i',i<index?'done':i===index?'current':''));row.append(dots);return row;}
     function roundBank(bank,idOf){const fresh=bank.filter(q=>!has(idOf(q))),seen=bank.filter(q=>has(idOf(q)));return [...shuffle(fresh),...shuffle(seen)].slice(0,5);}
     function finish(restart){stage.replaceChildren();const panel=node('section','practice-finish');panel.append(node('span','practice-finish-icon','✦'),node('p','practice-eyebrow',pick('A LITTLE PRACTICE. A BIG IDEA.','UN POCO DE PRÁCTICA. UNA GRAN IDEA.')),node('h2','',pick('Look what you learned!','¡Mira todo lo que aprendiste!')),node('p','',pick('You explored five challenges. Your new points are waiting on the home page.','Exploraste cinco retos. Tus puntos nuevos te esperan en la página de inicio.')),node('strong','practice-round-score',pick(roundPoints+' new points',roundPoints+' puntos nuevos')));const actions=node('div','practice-actions');actions.append(btn(pick('Try five more','Prueba cinco más'),restart));const home=node('a','practice-button practice-button-light',pick('See my scoreboard','Ver mi marcador'));home.href='#home';actions.append(home);panel.append(actions);stage.append(panel);panel.querySelector('h2').tabIndex=-1;panel.querySelector('h2').focus({preventScroll:true});}
     function makeNext(done){return btn(pick('Next discovery →','Siguiente descubrimiento →'),done,'practice-button practice-next');}
-    function showChoiceRound(bank,idOf,draw){let deck=[],index=0;function start(){roundPoints=0;deck=roundBank(bank,idOf);index=0;render();}function render(){if(disposed)return;if(index>=deck.length){finish(start);return;}stage.replaceChildren();stage.append(progress(index,deck.length));draw(deck[index],()=>{index++;render();});}start();return start;}
+    let preserveRound=!!api.preserveSelection;
+    function nextID(key,ids){return api.nextRandom?.(key,ids)??ids[Math.floor(Math.random()*ids.length)];}
+    function showChoiceRound(bank,idOf,draw,key){
+      const ids=bank.map(idOf),byID=new Map(bank.map(q=>[idOf(q),q])),memory='random-current:'+key;
+      let index=0,current=null;const stored=api.get?.(memory);
+      function select(){current=byID.get(nextID(key,ids))||bank[0];api.set?.(memory,{id:idOf(current),index,points:roundPoints});}
+      function start(){roundPoints=0;index=0;select();render();}
+      function render(){if(disposed)return;if(index>=5){finish(start);return;}stage.replaceChildren();stage.dataset.challengeId=idOf(current);stage.append(progress(index,5));draw(current,()=>{index++;if(index<5)select();render();});}
+      if(preserveRound&&stored&&byID.has(stored.id)){current=byID.get(stored.id);index=Number.isInteger(stored.index)?Math.max(0,Math.min(4,stored.index)):0;roundPoints=Number.isFinite(stored.points)?stored.points:0;render();}else start();preserveRound=false;
+      return start;
+    }
     function multipleChoice({question,options,answer,explain,clue},id,next,extra){
       const card=node('section','practice-card'),prompt=node('h2','practice-question',question);card.append(prompt);if(extra)card.append(extra);
       if(clue){const detail=node('details','practice-hint');detail.append(node('summary','',pick('Need a clue?','¿Quieres una pista?')),node('p','',clue));card.append(detail);}
@@ -3283,26 +3293,28 @@ window.MLL_ES_B = [
     function math(){
       let level=api.get?.('mathLevel')==='stretch'?'stretch':'small';
       const controls=node('div','practice-levels');controls.setAttribute('aria-label',pick('Number range','Tamaño de los números'));
-      for(const [id,en,es]of [['small','Up to 20','Hasta 20'],['stretch','Stretch: up to 100','Un reto: hasta 100']]){const b=btn(pick(en,es),()=>{level=id;api.set?.('mathLevel',level);launch();},'practice-level');b.dataset.level=id;controls.append(b);}heading.append(controls,node('p','practice-bank-note',pick('Fresh generated problems every round. Replay as much as you like; each different problem earns points once.','Problemas nuevos generados en cada ronda. Practica cuanto quieras; cada problema distinto da puntos una sola vez.')));
+      for(const [id,en,es]of [['small','Up to 20','Hasta 20'],['stretch','Stretch: up to 100','Un reto: hasta 100']]){const b=btn(pick(en,es),()=>{level=id;api.set?.('mathLevel',level);preserveRound=false;launch();},'practice-level');b.dataset.level=id;controls.append(b);}heading.append(controls,node('p','practice-bank-note',pick('Fresh generated problems every round. Replay as much as you like; each different problem earns points once.','Problemas nuevos generados en cada ronda. Practica cuanto quieras; cada problema distinto da puntos una sola vez.')));
       const bankCount=node('p','practice-bank-note');heading.append(bankCount);
       function launch(){controls.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.level===level)));const bank=generateMath(level);bankCount.textContent=pick(bank.length.toLocaleString('en-US')+' different problems in this level',bank.length.toLocaleString('es-EC')+' problemas diferentes en este nivel');showChoiceRound(bank,q=>q.id,(q,next)=>{
         const set=new Set([q.result]);for(const n of shuffle([q.result-1,q.result+1,q.result+2,q.result-2,q.result+10,q.result-10])){if(n>=0&&n<=100)set.add(n);if(set.size===4)break;}const options=shuffle([...set]);
         let help=null;if(level==='small'){help=node('details','practice-hint practice-dot-hint');help.append(node('summary','',pick('Count with dots','Cuenta con los puntos')));const counters=node('div','practice-counters');counters.setAttribute('role','img');counters.setAttribute('aria-label',pick(q.op==='+'?q.a+' blue dots plus '+q.b+' yellow dots':q.a+' dots with '+q.b+' crossed out',q.op==='+'?q.a+' puntos azules más '+q.b+' amarillos':q.a+' puntos con '+q.b+' tachados'));const first=node('span','practice-counter-group');for(let i=0;i<q.a;i++)first.append(node('i',q.op==='−'&&i<q.b?'crossed':''));counters.append(first);if(q.op==='+'){counters.append(node('b','', '+'));const second=node('span','practice-counter-group yellow');for(let i=0;i<q.b;i++)second.append(node('i'));counters.append(second);}help.append(counters);}
         multipleChoice({question:q.a+' '+q.op+' '+q.b+' = ?',options,answer:options.indexOf(q.result),explain:q.a+' '+q.op+' '+q.b+' = '+q.result+'.'},q.id,next,help);
-      });}launch();
+      },'practice:math:'+level);}launch();
     }
     function quiz(){
       const bank=questionBank(api);heading.append(node('p','practice-bank-note',pick(bank.length+' questions about people and places',bank.length+' preguntas sobre personas y lugares')));
       if(!bank.length){stage.append(node('p','practice-card',pick('Explore a person or a place. Their questions will be here to practice.','Explora una persona o un lugar. Aquí podrás practicar con sus preguntas.')));return;}
-      showChoiceRound(bank,q=>q.id,(q,next)=>multipleChoice({...q,clue:q.clue||q.explain},q.id,next));
+      showChoiceRound(bank,q=>q.id,(q,next)=>multipleChoice({...q,clue:q.clue||q.explain},q.id,next),'practice:quiz');
     }
     function wordRound(type,draw){
       const bank=WORDS[lang],idOf=w=>'practice:'+type+':'+lang+':'+w[0],memory='current-'+type+'-'+lang;
-      let index=Number(api.get?.(memory));if(!Number.isInteger(index)||index<0||index>=bank.length)index=Math.max(0,bank.findIndex(w=>!has(idOf(w))));
+      const ids=bank.map((w,i)=>String(i)),sharedMemory='current-'+type;
+      function randomIndex(){return Number(nextID('practice:'+type+':'+lang,ids));}
+      let index=api.preserveSelection?Number(api.get?.(sharedMemory)??api.get?.(memory)):randomIndex();if(!Number.isInteger(index)||index<0||index>=bank.length)index=randomIndex();
       const navigation=node('div','practice-word-navigation'),label=node('label','practice-word-select-label',pick('Choose a numbered word','Elige una palabra numerada')),select=node('select','practice-word-select'),count=node('p','practice-bank-note');
-      select.setAttribute('aria-label',pick('Choose word number','Elige el número de palabra'));label.append(select);navigation.append(btn(pick('← Previous','← Anterior'),()=>{index=(index+99)%100;render();},'practice-button practice-button-light'),label,btn(pick('Next →','Siguiente →'),()=>{index=(index+1)%100;render();},'practice-button practice-button-light'));heading.append(count,navigation);
+      select.setAttribute('aria-label',pick('Choose word number','Elige el número de palabra'));label.append(select);navigation.append(btn(pick('← Previous','← Anterior'),()=>{index=(index+99)%100;render();},'practice-button practice-button-light'),label,btn(pick('Next →','Siguiente →'),()=>{index=randomIndex();render();},'practice-button practice-button-light'));heading.append(count,navigation);
       select.addEventListener('change',()=>{index=Number(select.value);render();});
-      function render(){if(disposed)return;api.set?.(memory,index);stage.replaceChildren();select.replaceChildren();bank.forEach((w,i)=>{const o=node('option','',pick('Word ','Palabra ')+String(i+1).padStart(3,'0')+(has(idOf(w))?' ✓':''));o.value=String(i);select.append(o);});select.value=String(index);const completed=bank.filter(w=>has(idOf(w))).length;count.textContent=pick('100 words to discover · '+completed+' completed','100 palabras por descubrir · '+completed+(completed===1?' completada':' completadas'));const marker=node('p','practice-word-counter',pick('Word ','Palabra ')+String(index+1).padStart(3,'0')+' / 100');stage.append(marker);draw(bank[index],()=>{for(let step=1;step<=100;step++){const candidate=(index+step)%100;if(!has(idOf(bank[candidate]))){index=candidate;render();return;}}index=(index+1)%100;render();});}
+      function render(){if(disposed)return;api.set?.(memory,index);api.set?.(sharedMemory,index);stage.replaceChildren();select.replaceChildren();bank.forEach((w,i)=>{const o=node('option','',pick('Word ','Palabra ')+String(i+1).padStart(3,'0')+(has(idOf(w))?' ✓':''));o.value=String(i);select.append(o);});select.value=String(index);const completed=bank.filter(w=>has(idOf(w))).length;count.textContent=pick('100 words to discover · '+completed+' completed','100 palabras por descubrir · '+completed+(completed===1?' completada':' completadas'));const marker=node('p','practice-word-counter',pick('Word ','Palabra ')+String(index+1).padStart(3,'0')+' / 100');stage.append(marker);draw(bank[index],()=>{index=randomIndex();render();});}
       render();
     }
     function spelling(){wordRound('spelling',(word,next)=>{
@@ -3540,17 +3552,19 @@ window.MLL_ES_B = [
   function mount(host, api) {
     api = api || {};
     const lang = api.lang === 'es' ? 'es' : 'en', pick = (en,es) => lang === 'es' ? es : en;
-    let disposed = false, number = Math.max(1,Math.min(100,Number(api.get?.('wordsearch-current-' + lang)) || 1)), boardData, found, currentID, gesture = null, tapAnchor = null, focusCell = 0;
+    const puzzleIDs=puzzles.map(p=>String(p.number));
+    function randomNumber(){const value=api.nextRandom?.('wordsearch:'+lang,puzzleIDs);return value==null?1+Math.floor(Math.random()*100):Number(value);}
+    let disposed = false, number = api.preserveSelection?Math.max(1,Math.min(100,Number(api.get?.('wordsearch-current')) || Number(api.get?.('wordsearch-current-' + lang)) || 1)):randomNumber(), boardData, found, currentID, gesture = null, tapAnchor = null, focusCell = 0;
     const localCompleted = new Set();
     const root = node('section','ws-lab'); root.dataset.activity = 'wordsearch';
     const back = node('a','ws-back',pick('← Back to learning','← Volver a aprender')); back.href = '#home';
     const heading = node('header','ws-heading');
-    heading.append(node('p','ws-eyebrow',pick('100 WORD ADVENTURES','100 AVENTURAS CON PALABRAS')),node('h1','',pick('Word Explorer','Explorador de palabras')),node('p','ws-intro',pick('Circle every hidden word. Finish a puzzle. Earn one point!','Encierra cada palabra escondida. ¡Completa una sopa de letras y gana un punto!')));
+    heading.append(node('p','ws-eyebrow',pick('100 WORD ADVENTURES','100 AVENTURAS CON PALABRAS')),node('h1','',pick('Word Explorer','Explorador de palabras')),node('p','ws-intro',pick('Circle every hidden word. Earn 1 point for each new word!','Encierra cada palabra escondida. ¡Gana 1 punto por cada palabra nueva!')));
     const nav = node('div','ws-navigation'), selectLabel = node('label','ws-select-label',pick('Choose a puzzle','Elige una sopa de letras')), select = node('select','ws-select'); select.setAttribute('aria-label',pick('Choose a numbered word search','Elige una sopa de letras numerada'));
     const previous = button(pick('← Previous','← Anterior'),() => open(number - 1),'ws-button ws-button-soft');
-    const next = button(pick('Next →','Siguiente →'),() => open(number + 1),'ws-button ws-button-soft');
+    const next = button(pick('Next →','Siguiente →'),() => open(randomNumber()),'ws-button ws-button-soft');
     const fresh = button(pick('Find an unfinished puzzle','Buscar una sin terminar'),() => {
-      for (let step = 1; step <= 100; step++) {const candidate = (number - 1 + step) % 100 + 1; if (!isComplete(idOf(candidate))) {open(candidate); return;}}
+      const remaining=puzzleIDs.filter(id=>!isComplete(idOf(Number(id))));if(remaining.length){const chosen=api.nextRandom?.('wordsearch-unfinished:'+lang,remaining)??remaining[Math.floor(Math.random()*remaining.length)];open(Number(chosen));return;}
       feedback.textContent = pick('You finished all 100 in this language! Choose any puzzle to explore again.','¡Terminaste las 100 en este idioma! Elige cualquiera para volver a explorar.');
     },'ws-button ws-button-outline');
     select.addEventListener('change',() => open(Number(select.value))); selectLabel.append(select); nav.append(previous,selectLabel,next);
@@ -3564,7 +3578,7 @@ window.MLL_ES_B = [
     const feedback = node('p','ws-feedback'); feedback.setAttribute('role','status'); feedback.setAttribute('aria-live','polite');
     const hint = button(pick('Show a starting letter','Muestra una letra inicial'),showHint,'ws-button ws-button-soft');
     const finish = node('div','ws-finish'); finish.hidden = true;
-    const finishTitle = node('h3'), finishText = node('p'), finishNext = button(pick('Another word adventure →','Otra aventura de palabras →'),() => open(number % 100 + 1)); finish.append(finishTitle,finishText,finishNext);
+    const finishTitle = node('h3'), finishText = node('p'), finishNext = button(pick('Another word adventure →','Otra aventura de palabras →'),() => open(randomNumber())); finish.append(finishTitle,finishText,finishNext);
     const alphabetNote = node('p','ws-alphabet-note',pick('Spaces are left out of the grid.','En el tablero se omiten los espacios y las tildes; la Ñ sí conserva su rayita.'));
     boardPanel.append(title,subtitle,instructions,mobileWords,boardWrap,alphabetNote); side.append(sideTitle,counter,meter,list,hint,feedback,finish); stage.append(boardPanel,side); root.append(back,heading,nav,fresh,stage); host.replaceChildren(root);
     let hintTimer = null;
@@ -3585,7 +3599,7 @@ window.MLL_ES_B = [
     function open(n) {
       if (disposed) return;
       number = Math.max(1,Math.min(100,n)); currentID = idOf(number); boardData = generate(number,lang); gesture = null; tapAnchor = null; preview.replaceChildren(); feedback.textContent = ''; finish.hidden = true; clearTimeout(hintTimer);
-      api.set?.('wordsearch-current-' + lang,number);
+      api.set?.('wordsearch-current-' + lang,number); api.set?.('wordsearch-current',number);
       found = new Map();
       const stored = api.get?.(currentID); for (const item of Array.isArray(stored?.found) ? stored.found : []) if (validFound(item)) found.set(item.index,item);
       if (isComplete(currentID)) boardData.placements.forEach(p => {if (!found.has(p.index)) found.set(p.index,{index:p.index,start:p.start,end:p.end});});
@@ -3603,7 +3617,7 @@ window.MLL_ES_B = [
       list.replaceChildren(); mobileWords.replaceChildren(); puzzles[number - 1][lang].forEach((word,index) => {
         const item = node('li','ws-word'), name = node('span','ws-word-name',word), mark = node('span','ws-word-mark'); item.dataset.wordIndex = String(index); item.style.setProperty('--word-color',colors[index]); mark.setAttribute('aria-hidden','true'); item.append(node('span','ws-word-number',String(index + 1).padStart(2,'0')),name,mark); list.append(item); const mobileItem = node('li','ws-mobile-word',word); mobileItem.dataset.wordIndex = String(index); mobileWords.append(mobileItem);
       });
-      options(); select.value = String(number); previous.disabled = number === 1; next.disabled = number === 100; repaint();
+      options(); select.value = String(number); previous.disabled = number === 1; next.disabled = false; repaint();
       if (found.size === 10) completedView(false);
     }
     function repaint() {
@@ -3617,13 +3631,14 @@ window.MLL_ES_B = [
     }
     function completedView(earned) {
       finish.hidden = false; finishTitle.textContent = pick('Word adventure complete!','¡Aventura de palabras completa!');
-      finishText.textContent = earned ? pick('+1 point! All ten words are in your collection.','¡+1 punto! Encontraste las diez palabras.') : pick('Completed ✓ Your point is already saved.','Completada ✓ Tu punto ya está guardado.');
+      finishText.textContent = pick('All 10 words found! Each new word earns 1 point.','¡Encontraste las 10 palabras! Cada palabra nueva da 1 punto.');
       options(); select.value = String(number);
     }
     function addFound(index,start,end) {
       if (found.has(index)) {feedback.textContent = pick('You already circled that one. Look for another!','Ya encerraste esa palabra. ¡Busca otra!'); return false;}
       found.set(index,{index,start,end}); tapAnchor = null; preview.replaceChildren(); save(); repaint();
-      feedback.textContent = '✓ ' + puzzles[number - 1][lang][index] + pick(' — found!',' — ¡encontrada!');
+      const earned=api.findItem?!!api.findItem(currentID+':'+index):true;
+      feedback.textContent = '✓ ' + puzzles[number - 1][lang][index] + (earned?pick(' — found! +1 point.',' — ¡encontrada! +1 punto.'):pick(' — found again!',' — ¡encontrada otra vez!'));
       if (found.size === 10) {
         const earned = isComplete(currentID) ? false : (api.complete ? !!api.complete(currentID) : true);
         localCompleted.add(currentID); completedView(earned);
@@ -3840,21 +3855,22 @@ window.MLL_ES_B = [
     const write=(key,value)=>{try{if(api.set)api.set(key,value);}catch(e){}};
     const isComplete=id=>{try{return !!(api.completed&&api.completed(id));}catch(e){return false;}};
     const root=element('section','spy-app');host.replaceChildren(root);
+    function randomIndex(){const ids=scenes.map(s=>s.id),id=api.nextRandom?.('spy',ids)??ids[Math.floor(Math.random()*ids.length)];return Math.max(0,scenes.findIndex(s=>s.id===id));}
     function title(a){return api.lang==='es'?a.es:a.en;}
     function say(en,es){status.textContent=pick(en,es);}
     function clearEvents(){if(cleanup){cleanup();cleanup=null;}}
     function save(){write('spy:progress:'+scenes[current].number,{found:progress.found.slice(),rings:progress.rings.slice()});}
     function catalog(){
-      clearEvents();root.replaceChildren();const h=element('div','spy-catalog-heading');h.append(element('span','spy-kicker',pick('LOOK CLOSELY · 40 SCENES','MIRA CON ATENCIÓN · 40 ESCENAS')),element('h1','',pick('I Spy','Veo, veo')),element('p','',pick('A world of little things to find. Circle all 18 to earn 1 point.','Un mundo de cosas por encontrar. Rodea las 18 y gana 1 punto.')));root.append(h);
-      const grid=element('div','spy-catalog');scenes.forEach(scene=>{const p=read('spy:progress:'+scene.number,{}),count=Array.isArray(p.found)?p.found.filter(id=>scene.targets.includes(id)).length:0,done=isComplete(scene.id),b=button('',()=>open(scene.number-1),'spy-scene-card');const thumb=element('div','spy-scene-thumb');thumb.innerHTML='<svg viewBox="0 0 1000 700" aria-hidden="true">'+background(scene)+scene.targets.slice(0,3).map((id,i)=>{const a=artMap.get(id);return a?'<g class="spy-symbol" transform="translate('+(135+i*252)+' '+(185+(i%2)*90)+') scale(.85)">'+a.svg+'</g>':'';}).join('')+'</svg>';b.append(thumb,element('span','spy-scene-number',String(scene.number).padStart(2,'0')),element('strong','',title(scene)),element('span','spy-scene-count',done?pick('✓ Point earned','✓ Punto ganado'):count?pick(count+' / 18 found',count+' / 18 encontrados'):pick('18 things to find','18 cosas para encontrar')));grid.append(b);});root.append(grid);
+      clearEvents();root.replaceChildren();const h=element('div','spy-catalog-heading');h.append(element('span','spy-kicker',pick('LOOK CLOSELY · 40 SCENES','MIRA CON ATENCIÓN · 40 ESCENAS')),element('h1','',pick('I Spy','Veo, veo')),element('p','',pick('A world of little things to find. Earn 1 point for each new thing you find.','Un mundo de cosas por encontrar. Gana 1 punto por cada objeto nuevo que encuentres.')));root.append(h);
+      const grid=element('div','spy-catalog');scenes.forEach(scene=>{const p=read('spy:progress:'+scene.number,{}),count=Array.isArray(p.found)?p.found.filter(id=>scene.targets.includes(id)).length:0,done=isComplete(scene.id),b=button('',()=>open(scene.number-1),'spy-scene-card');const thumb=element('div','spy-scene-thumb');thumb.innerHTML='<svg viewBox="0 0 1000 700" aria-hidden="true">'+background(scene)+scene.targets.slice(0,3).map((id,i)=>{const a=artMap.get(id);return a?'<g class="spy-symbol" transform="translate('+(135+i*252)+' '+(185+(i%2)*90)+') scale(.85)">'+a.svg+'</g>':'';}).join('')+'</svg>';b.append(thumb,element('span','spy-scene-number',String(scene.number).padStart(2,'0')),element('strong','',title(scene)),element('span','spy-scene-count',done?pick('✓ Scene complete','✓ Escena completa'):count?pick(count+' / 18 found',count+' / 18 encontrados'):pick('18 things to find','18 cosas para encontrar')));grid.append(b);});root.append(grid);
     }
     function open(index){
       clearEvents();current=(index+scenes.length)%scenes.length;const scene=scenes[current];write('spy:last',current);mode='circle';zoom=1;points=[];activePointer=null;
       const stored=read('spy:progress:'+scene.number,{});progress={found:Array.isArray(stored.found)?[...new Set(stored.found.filter(id=>scene.targets.includes(id)))]:[],rings:Array.isArray(stored.rings)?stored.rings.filter(r=>scene.targets.includes(r.id)&&Array.isArray(r.points)&&r.points.length<=200&&r.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))):[]};
       items=layout(scene,art);root.replaceChildren();
       const top=element('div','spy-top');top.append(button(pick('← All 40 scenes','← Las 40 escenas'),catalog,'spy-button spy-back'));
-      const pager=element('div','spy-pager');pager.append(button('←',()=>open(current-1)),element('span','',String(scene.number).padStart(2,'0')+' / 40'),button('→',()=>open(current+1)));pager.firstChild.setAttribute('aria-label',pick('Previous scene','Escena anterior'));pager.lastChild.setAttribute('aria-label',pick('Next scene','Escena siguiente'));top.append(pager);root.append(top);
-      const intro=element('div','spy-intro');heading=element('h1','',title(scene));foundCount=element('div','spy-progress');intro.append(heading,foundCount);root.append(intro,element('p','spy-instructions',pick('Draw a circle around each hidden thing. Find all 18 for 1 point.','Dibuja un círculo alrededor de cada objeto escondido. Encuentra los 18 y gana 1 punto.')));
+      const pager=element('div','spy-pager');pager.append(button('←',()=>open(current-1)),element('span','',String(scene.number).padStart(2,'0')+' / 40'),button('→',()=>open(randomIndex())));pager.firstChild.setAttribute('aria-label',pick('Previous scene','Escena anterior'));pager.lastChild.setAttribute('aria-label',pick('Next scene','Escena siguiente'));top.append(pager);root.append(top);
+      const intro=element('div','spy-intro');heading=element('h1','',title(scene));foundCount=element('div','spy-progress');intro.append(heading,foundCount);root.append(intro,element('p','spy-instructions',pick('Draw a circle around each hidden thing. Earn 1 point for each new find.','Dibuja un círculo alrededor de cada objeto escondido. Gana 1 punto por cada objeto nuevo.')));
       const toolbar=element('div','spy-toolbar'),modes=element('div','spy-modes');
       const circleB=button(pick('Circle','Rodear'),()=>setMode('circle')),moveB=button(pick('Move','Mover'),()=>setMode('move')),tapB=button(pick('Tap instead','Tocar'),()=>setMode('tap'));
       const modeButtons={circle:circleB,move:moveB,tap:tapB};modes.append(circleB,moveB,tapB);toolbar.append(modes);
@@ -3885,7 +3901,8 @@ window.MLL_ES_B = [
       if(!item)return;if(!item.target){say('A good discovery! This one is not on the list.','¡Buen hallazgo! Este no está en la lista.');return;}
       if(progress.found.includes(item.id)){say('You already found that one. Keep looking!','Ese ya lo encontraste. ¡Sigue buscando!');return;}
       progress.found.push(item.id);progress.rings.push({id:item.id,points:ring?ring.map(p=>({x:Math.round(p.x),y:Math.round(p.y)})):Array.from({length:33},(_,i)=>({x:Math.round(item.x+Math.cos(i*Math.PI/16)*item.size*.64),y:Math.round(item.y+Math.sin(i*Math.PI/16)*item.size*.64)}))});save();
-      const name=title(artMap.get(item.id));say(name+' found! '+progress.found.length+' of 18.', '¡Encontraste '+name.toLowerCase()+'! '+progress.found.length+' de 18.');
+      const earned=api.findItem?!!api.findItem(scenes[current].id+':'+item.id):true;
+      const name=title(artMap.get(item.id));say(name+' found! '+progress.found.length+' of 18.'+(earned?' +1 point.':''), '¡Encontraste '+name.toLowerCase()+'! '+progress.found.length+' de 18.'+(earned?' +1 punto.':''));
       if(progress.found.length===18&&api.complete)api.complete(scenes[current].id);
       refresh();
     }
@@ -3894,9 +3911,9 @@ window.MLL_ES_B = [
       scene.targets.forEach(id=>{const a=artMap.get(id),done=progress.found.includes(id),n=element('div','spy-target'+(done?' is-found':''));n.innerHTML=symbolSvg(a);n.append(element('span','',title(a)),element('span','spy-tick',done?'✓':''));if(done)n.setAttribute('aria-label',title(a)+pick(', found',', encontrado'));targetList.append(n);});
       ringLayer.innerHTML=progress.rings.filter(r=>progress.found.includes(r.id)).map(r=>'<path class="spy-saved-ring" d="M'+r.points.map(p=>p.x+' '+p.y).join('L')+'Z"/>').join('');
       svg.querySelectorAll('[data-object]').forEach(g=>{const found=progress.found.includes(g.dataset.object);g.classList.toggle('is-found',found);g.setAttribute('aria-pressed',String(found));});
-      completion.replaceChildren();if(progress.found.length===18){completion.classList.add('is-complete');completion.append(element('strong','',pick('All 18 found. Brilliant looking!','¡Encontraste los 18! ¡Qué buena vista!')),element('span','',pick('1 completion point per scene.','1 punto por cada escena completada.')),button(pick('Next scene →','Siguiente escena →'),()=>open(current+1)),button(pick('Find them again','Buscar otra vez'),()=>{progress={found:[],rings:[]};save();open(current);},'spy-button spy-light'));}else completion.classList.remove('is-complete');
+      completion.replaceChildren();if(progress.found.length===18){completion.classList.add('is-complete');completion.append(element('strong','',pick('All 18 found. Brilliant looking!','¡Encontraste los 18! ¡Qué buena vista!')),element('span','',pick('1 point for each new object found.','1 punto por cada objeto nuevo encontrado.')),button(pick('Next scene →','Siguiente escena →'),()=>open(randomIndex())),button(pick('Find them again','Buscar otra vez'),()=>{progress={found:[],rings:[]};save();open(current);},'spy-button spy-light'));}else completion.classList.remove('is-complete');
     }
-    const start=read('spy:last',null);if(Number.isInteger(start)&&start>=0&&start<40)open(start);else catalog();
+    const start=read('spy:last',null);if(api.preserveSelection&&Number.isInteger(start)&&start>=0&&start<40)open(start);else open(randomIndex());
     return function dispose(){destroyed=true;clearEvents();host.replaceChildren();};
   }
   window.MLL_SPY=Object.freeze({mount,scenes:Object.freeze(scenes),layout,circleHit});
@@ -3971,15 +3988,18 @@ window.MLL_ES_B = [
     const art=Array.isArray(api.art)?api.art:[],es=api.lang==='es',pick=(en,spanish)=>es?spanish:en;
     if(!art.length){host.textContent=pick('The drawing collection is loading. Please try again.','Los dibujos se están cargando. Inténtalo de nuevo.');return()=>{};}
     const stored=api.get('draw-session-v1',{})||{},knownColors=COLORS.includes(stored.color);
-    let index=Math.max(0,art.findIndex(p=>p.id===stored.id)),color=knownColors?stored.color:COLORS[0],width=[2,4,7].includes(stored.width)?stored.width:4;
-    let guide=!!stored.guide,erase=false,strokes=Array.isArray(stored.strokes)?validStrokes(stored.strokes):[],current=null,history=[],disposed=false,grading=false,loadToken=0,referenceImage=null;
-    let drafts=stored.drafts&&typeof stored.drafts==='object'?stored.drafts:{};
+    function randomIndex(){const ids=art.map(a=>a.id),id=api.nextRandom?.('draw',ids)??ids[Math.floor(Math.random()*ids.length)];return Math.max(0,art.findIndex(a=>a.id===id));}
+    let index=api.preserveSelection?Math.max(0,art.findIndex(p=>p.id===stored.id)):randomIndex(),color=knownColors?stored.color:COLORS[0],width=[2,4,7].includes(stored.width)?stored.width:4;
+    let guide=!!stored.guide,erase=false,strokes=[],current=null,history=[],disposed=false,grading=false,loadToken=0,referenceImage=null;
+    let drafts=stored.drafts&&typeof stored.drafts==='object'&&!Array.isArray(stored.drafts)?{...stored.drafts}:{};
+    if(art.some(a=>a.id===stored.id)&&Array.isArray(stored.strokes))drafts[stored.id]=validStrokes(stored.strokes);
+    strokes=validStrokes(drafts[art[index].id]||[]);
     let activePointer=null,dirty=false,saveTimer=null,lastResult=null;
     const inkLayer=canvas();
     const shell=element('section','draw-studio'),back=element('a','draw-back',pick('← Back to the lab','← Volver al laboratorio'));back.href='#home';
     const heading=element('header','draw-heading'),eyebrow=element('p','draw-eyebrow',pick('200 LITTLE MASTERPIECES','200 PEQUEÑAS OBRAS DE ARTE'));
     heading.append(eyebrow,element('h1','',pick('Draw & discover.','Dibuja y descubre.')),element('p','draw-intro',pick('Look at the picture. Pick a color. Make it your own.','Mira el dibujo. Elige un color. ¡Haz tu propia versión!')));
-    const toolbar=element('div','draw-navigation'),prev=button(pick('← Previous','← Anterior'),()=>choose(index-1),'draw-button draw-light'),next=button(pick('Next →','Siguiente →'),()=>choose(index+1),'draw-button draw-light');
+    const toolbar=element('div','draw-navigation'),prev=button(pick('← Previous','← Anterior'),()=>choose(index-1),'draw-button draw-light'),next=button(pick('Next →','Siguiente →'),()=>choose(randomIndex()),'draw-button draw-light');
     const numbered=element('div','draw-number'),title=element('h2',''),number=element('span','draw-eyebrow');numbered.append(number,title);
     toolbar.append(prev,numbered,next);
     const layout=element('div','draw-layout'),reference=element('section','draw-reference'),referenceTop=element('div','draw-panel-label',pick('YOUR INSPIRATION','TU INSPIRACIÓN'));
@@ -4000,7 +4020,7 @@ window.MLL_ES_B = [
     const feedback=element('p','draw-feedback');feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
     const completion=element('p','draw-completed'),checkRow=element('div','draw-check-row');checkRow.append(guideLabel,check);
     work.append(drawLabel,stage,palette,tools,checkRow,feedback,completion);layout.append(reference,work);
-    const bottom=element('div','draw-bottom'),newOne=button(pick('Find my next drawing →','Buscar mi siguiente dibujo →'),()=>{let found=-1;for(let n=1;n<=art.length;n++){const i=(index+n)%art.length;if(!api.completed('draw:'+art[i].id)){found=i;break;}}choose(found<0?(index+1)%art.length:found);},'draw-button draw-light');
+    const bottom=element('div','draw-bottom'),newOne=button(pick('Find my next drawing →','Buscar mi siguiente dibujo →'),()=>choose(randomIndex()),'draw-button draw-light');
     const progress=element('p','draw-progress');bottom.append(progress,newOne);
     const catalog=element('details','draw-catalog'),summary=element('summary','',pick('Choose any of the 200 drawings','Elige entre los 200 dibujos'));
     const find=element('input','draw-search');find.type='search';find.placeholder=pick('Find a duck, dog, rocket…','Busca un pato, perro, cohete…');find.setAttribute('aria-label',pick('Find a drawing','Buscar un dibujo'));
@@ -4037,7 +4057,7 @@ window.MLL_ES_B = [
       }catch(error){if(!disposed)setFeedback(pick('We could not check this time. Your drawing is safe—try again.','No pudimos revisar esta vez. Tu dibujo está guardado; vuelve a intentarlo.'));}
       finally{grading=false;if(!disposed){check.disabled=false;check.textContent=pick('Check my drawing ✦','Revisar mi dibujo ✦');save();}}}
     const resize=()=>paint(),observer=typeof ResizeObserver==='function'?new ResizeObserver(resize):null;if(observer)observer.observe(stage);else window.addEventListener('resize',resize);
-    load();
+    load();save();
     function dispose(){if(disposed)return;if(current){strokes.push(current);current=null;}dirty=true;save();disposed=true;++loadToken;clearTimeout(saveTimer);observer?.disconnect();window.removeEventListener('resize',resize);}
     dispose.saveState=save;dispose.getResult=()=>lastResult;return dispose;
   }
@@ -4120,7 +4140,152 @@ window.MLL_ES_B = [
 
 ;
 
-/* ===== app.js ===== */
+
+;
+/* Original vector ballpark artwork for the earned-play card and entry page. */
+window.MLL_BASEBALL_THUMB=`<svg viewBox="0 0 900 590" xmlns="http://www.w3.org/2000/svg" role="presentation"><defs><linearGradient id="bp-sky" x2="0" y2="1"><stop stop-color="#69d0e7"/><stop offset="1" stop-color="#f6dca5"/></linearGradient><linearGradient id="bp-turf" x2="0" y2="1"><stop stop-color="#318660"/><stop offset="1" stop-color="#194e46"/></linearGradient></defs><path fill="url(#bp-sky)" d="M0 0h900v590H0z"/><circle cx="744" cy="91" r="53" fill="#ffe9b1"/><path d="M0 132q180-47 313 2t276-1 311 2v114H0" fill="#578999" opacity=".6"/><path d="M0 188Q450 17 900 188v140H0" fill="#10394b"/><path d="M0 201Q450 32 900 201M0 224Q450 55 900 224M0 247Q450 78 900 247" fill="none" stroke="#dcb884" stroke-width="10" stroke-dasharray="5 14"/><path d="M0 272Q450 89 900 272v318H0" fill="url(#bp-turf)"/><path d="M79 333L310 197M216 406L409 200M383 481L513 216M560 527L620 246M737 560L744 278" stroke="#8bc389" stroke-opacity=".16" stroke-width="73"/><path d="M145 263Q450 167 755 263L450 567Z" fill="#76a778"/><path d="M450 239L685 378 450 555 215 378Z" fill="#dcb886"/><path d="M450 290L608 384 450 503 292 384Z" fill="#37865f"/><path d="M64 224L450 545 836 224" fill="none" stroke="#fff6d7" stroke-width="4"/><path d="M450 245L675 381 450 544 225 381Z" fill="none" stroke="#fff6d7" stroke-width="3"/><ellipse cx="450" cy="394" rx="39" ry="23" fill="#dcb886"/><path d="M437 540h26v13l-13 10-13-10Z" fill="#fff"/><path d="M439 239h22v14h-22zM664 374h23v16h-23zM214 374h23v16h-23z" fill="#fff7e1"/><rect x="435" y="391" width="30" height="6" rx="2" fill="#fff7e1"/><g fill="#12364b" stroke="#ffe5b2" stroke-width="3"><rect x="330" y="77" width="240" height="99" rx="9"/></g><g fill="#fff1cf"><path d="M360 103h43v8h-43zm0 23h180v5H360zm0 14h29v17h-29zm51 0h29v17h-29zm51 0h29v17h-29zm51 0h29v17h-29z"/><path d="M484 105l9-8 9 8-3 13h-12Z" fill="#ffd36a"/></g><g stroke="#173f50" stroke-width="8"><path d="M88 225V41m724 184V41"/></g><g fill="#fff1cf"><rect x="49" y="31" width="79" height="22" rx="3"/><rect x="773" y="31" width="79" height="22" rx="3"/></g><g transform="translate(450 367)"><ellipse cy="34" rx="19" ry="8" fill="#133e37" opacity=".4"/><path d="M-9 20l-4 23m20-23 5 23" stroke="#f8f4df" stroke-width="9"/><path d="M-13-2h26l-5 28H-8Z" fill="#ffd15e"/><circle cy="-12" r="11" fill="#d79764"/><path d="M-13-16q2-16 22-7l4 11H-13" fill="#153e51"/><path d="M-11 2l-14 14m36-14 11-13" stroke="#d79764" stroke-width="7" stroke-linecap="round"/></g><g transform="translate(150 466) rotate(-24)"><rect x="-8" y="-118" width="21" height="167" rx="11" fill="#bf7e43"/><rect x="-5" y="-111" width="7" height="107" rx="4" fill="#efbf77"/><path d="M-8 49h21" stroke="#553b2a" stroke-width="7"/></g><g transform="translate(733 443)"><circle r="51" fill="#fff7e4"/><path d="M-21-47q44 47 1 92M24-44q-45 45-1 89" fill="none" stroke="#cf5346" stroke-width="3"/><path d="M-24-37l15-3m-14 18 18-3m-14 18 18-2m-20 18 18 2m-26 14 18 3m29-68-15-3m14 18-18-3m14 18-18-2m20 18-18 2m26 14-18 3" stroke="#cf5346" stroke-width="3"/></g></svg>`;
+window.MLL_HOME_THUMBS.baseball=window.MLL_BASEBALL_THUMB;
+
+;
+/* Max's ballpark: original vector artwork, touch controls, durable game snapshots. */
+(function(){
+'use strict';
+const clone=o=>JSON.parse(JSON.stringify(o));
+const text=(en,es,lang)=>lang==='es'?es:en;
+const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+function create(options={}){return {version:1,inning:1,outs:0,strikes:0,bases:[false,false,false],runs:0,opponentRuns:0,hits:0,homeRuns:0,pitches:0,plays:0,playerByInning:[0,null,null],opponentByInning:[null,null,null],seed:(options.seed>>>0)||Math.floor(Math.random()*2147483647)+1,status:'playing',sound:false,difficulty:options.difficulty==='allstar'?'allstar':'rookie'};}
+function random(s){s.seed=(Math.imul(s.seed,1664525)+1013904223)>>>0;return s.seed/4294967296;}
+function normalize(input){const d=create();if(!input||input.version!==1)return d;const s={...d,...clone(input)};s.inning=clamp(Math.floor(+s.inning||1),1,3);s.outs=clamp(Math.floor(+s.outs||0),0,3);s.strikes=clamp(Math.floor(+s.strikes||0),0,2);s.bases=[0,1,2].map(i=>!!(input.bases||[])[i]);for(const k of ['runs','opponentRuns','hits','homeRuns','pitches','plays'])s[k]=Math.max(0,Math.floor(+s[k]||0));s.playerByInning=[0,1,2].map(i=>(input.playerByInning||[])[i]===null?null:Math.max(0,Math.floor(+(input.playerByInning||[])[i]||0)));s.opponentByInning=[0,1,2].map(i=>(input.opponentByInning||[])[i]===null?null:Math.max(0,Math.floor(+(input.opponentByInning||[])[i]||0)));s.status=input.status==='finished'?'finished':'playing';s.difficulty=input.difficulty==='allstar'?'allstar':'rookie';return s;}
+function timingOutcome(offset,difficulty='rookie'){
+ const a=Math.abs(offset),w=difficulty==='allstar'?.86:1;
+ if(a<=.042*w)return 'homer';if(a<=.095*w)return 'double';if(a<=.145*w)return 'single';if(a<=.185*w)return offset<0?'triple':'single';if(a<=.225*w)return offset<0?'flyout':'groundout';if(a<=.29*w)return 'foul';return 'strike';
+}
+function advance(s,bases){let scored=0;const next=[false,false,false];for(let i=2;i>=0;i--){if(!s.bases[i])continue;const dest=i+bases;if(dest>=3)scored++;else next[dest]=true;}if(bases>=4)scored++;else next[bases-1]=true;s.bases=next;return scored;}
+function applyPlay(input,outcome){
+ const s=normalize(input),before=clone(s);if(s.status==='finished')return {state:s,event:{outcome:'finished',runs:0}};
+ let runs=0;const event={outcome,runs:0,inning:s.inning,endedInning:false,opponentAdded:0,before};s.pitches++;s.plays++;
+ if(['single','double','triple','homer'].includes(outcome)){s.hits++;if(outcome==='homer')s.homeRuns++;runs=advance(s,{single:1,double:2,triple:3,homer:4}[outcome]);s.strikes=0;}
+ else if(outcome==='foul'){if(s.strikes<2)s.strikes++;}
+ else if(outcome==='strike'){s.strikes++;if(s.strikes>=3){s.strikes=0;s.outs++;event.outcome='strikeout';}}
+ else if(outcome==='flyout'||outcome==='groundout'){s.outs++;s.strikes=0;}
+ else throw new Error('Unknown baseball outcome: '+outcome);
+ // A full play counts (including all runners on a homer), then the half-inning ends at 5+ runs.
+ s.runs+=runs;s.playerByInning[s.inning-1]=(s.playerByInning[s.inning-1]||0)+runs;event.runs=runs;
+ if(s.outs>=3||s.playerByInning[s.inning-1]>=5){
+  event.endedInning=true;event.runLimit=s.playerByInning[s.inning-1]>=5;
+  const r=random(s);const added=r<.27?0:r<.60?1:r<.86?2:r<.97?3:4;s.opponentRuns+=added;s.opponentByInning[s.inning-1]=added;event.opponentAdded=added;s.bases=[false,false,false];s.strikes=0;
+  if(s.inning===3){s.status='finished';}else{s.inning++;s.outs=0;s.playerByInning[s.inning-1]=0;}
+ }
+ return {state:s,event};
+}
+function summary(s){return {runs:s.runs,opponentRuns:s.opponentRuns,hits:s.hits,homeRuns:s.homeRuns,innings:3,won:s.runs>s.opponentRuns,tied:s.runs===s.opponentRuns,pitches:s.pitches};}
+const labels={strike:['Strike!','¡Strike!'],strikeout:['Strike three. One out.','Tres strikes. Un out.'],foul:['Foul ball!','¡Bola fuera!'],single:['Base hit!','¡Sencillo!'],double:['A double!','¡Doble!'],triple:['A triple!','¡Triple!'],homer:['HOME RUN!','¡JONRÓN!'],flyout:['Caught in the air!','¡Atrapada en el aire!'],groundout:['Out at first!','¡Out en primera!']};
+function mount(host,api={}){
+ const lang=api.lang||'en',L=(en,es)=>text(en,es,lang),name=String(api.name||'Max');let state=normalize(api.session),phase='ready',elapsed=0,pitchDuration=0,disposed=false,paused=false,last=0,frame=0,swingAt=-1,result=null,flight=null,finishedNotified=false,audioContext=null;
+ const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+ host.innerHTML=`<section class="mll-ballpark" aria-label="${L('Baseball game','Juego de béisbol')}"><div class="bb-heading"><div><p class="bb-kicker">${L('LEARN. EARN. PLAY BALL.','APRENDE. GANA. JUEGA.')}</p><h1>${L('The Learning League','La Liga del Aprendizaje')}</h1></div><button class="bb-secondary bb-exit" type="button">${L('Save & leave','Guardar y salir')}</button></div><div class="bb-scoreboard"><div class="bb-score-team"><span class="bb-team-name"></span><strong data-score="home">0</strong></div><div class="bb-inning"><span>${L('INNING','ENTRADA')}</span><strong data-inning>1 / 3</strong><span class="bb-lights" aria-label="${L('Outs','Outs')}"></span></div><div class="bb-score-team bb-away"><span>${L('COMETS','COMETAS')}</span><strong data-score="away">0</strong></div></div><div class="bb-stadium-wrap"><canvas class="bb-stadium" width="1000" height="650" role="img" aria-label="${L('Baseball field. Watch the pitch approach the glowing home plate.','Campo de béisbol. Mira la pelota acercarse al plato brillante.')}"></canvas><div class="bb-stadium-tools"><button class="bb-mini bb-pause" type="button">${L('Pause','Pausa')}</button><button class="bb-mini bb-sound" type="button" aria-pressed="false">${L('Sound off','Sin sonido')}</button><span class="bb-speed-label"></span></div><div class="bb-result-banner" aria-hidden="true" hidden></div><div class="bb-overlay" hidden><div class="bb-overlay-card"></div></div><div class="bb-field-caption">${L('3 innings · 3 outs per inning','3 entradas · 3 outs por entrada')}</div></div><div class="bb-controls"><div class="bb-live"><strong class="bb-call" role="status" aria-live="polite"></strong><span class="bb-tip"></span><div class="bb-count"><span class="bb-strikes"></span><span class="bb-bases"></span></div></div><button class="bb-swing" type="button"></button></div><div class="bb-lower"><div class="bb-speed"><span>${L('Pitch speed','Velocidad')}</span><button type="button" data-speed="rookie">${L('Rookie','Principiante')}</button><button type="button" data-speed="allstar">${L('All-star','Estrella')}</button></div><button class="bb-rules-button" type="button" aria-expanded="false">${L('How to play','Cómo jugar')}</button></div><div class="bb-rules" hidden><p>${L('Tap “Pitch to me” to get ready. Watch the ball come toward you, then tap SWING when it reaches the bright ring at home plate. The ring turns gold at the best moment. Tap the field or press Space to swing, too.','Toca “Lánzame” para empezar. Mira cómo se acerca la pelota y toca BATEAR cuando llegue al aro brillante del plato. El aro se vuelve dorado en el mejor momento. También puedes tocar el campo o usar la barra espaciadora.')}</p><p>${L('Three strikes make one out. A foul adds a strike, but never the third. Hits move runners around the bases. After three outs, or a play that takes your inning to 5 runs, the Comets take their automatic turn. Play 3 innings; a tie stays a tie.','Tres strikes son un out. Una bola fuera cuenta como strike, pero nunca como el tercero. Los hits mueven a los corredores. Después de tres outs, o de una jugada que llegue a 5 carreras en la entrada, los Cometas juegan su turno automático. Juega 3 entradas; un empate queda como empate.')}</p><p>${L('Your progress saves after every pitch. Leaving and resuming this game costs no extra points. Baseball does not earn learning points.','Tu progreso se guarda después de cada lanzamiento. Salir y continuar este partido no cuesta más puntos. El béisbol no da puntos de aprendizaje.')}</p></div><div class="bb-boxscore" aria-label="${L('Runs by inning','Carreras por entrada')}"></div></section>`;
+ const $=s=>host.querySelector(s),all=s=>[...host.querySelectorAll(s)];$('.bb-team-name').textContent=name.toLocaleUpperCase(lang);const canvas=$('.bb-stadium'),ctx=canvas.getContext('2d');
+ const action=$('.bb-swing'),call=$('.bb-call'),tip=$('.bb-tip'),overlay=$('.bb-overlay'),overlayCard=$('.bb-overlay-card'),banner=$('.bb-result-banner');
+ function save(){if(api.onSave)api.onSave(clone(state));}
+ function sound(kind){if(!state.sound||disposed)return;try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;audioContext=audioContext||new AC();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});const t=audioContext.currentTime;
+  const note=(f,at,len,volume=.09)=>{const o=audioContext.createOscillator(),g=audioContext.createGain();o.type='triangle';o.frequency.setValueAtTime(f,at);g.gain.setValueAtTime(volume,at);g.gain.exponentialRampToValueAtTime(.001,at+len);o.connect(g);g.connect(audioContext.destination);o.start(at);o.stop(at+len);};
+  if(kind==='hit'||kind==='homer'){const buffer=audioContext.createBuffer(1,Math.floor(audioContext.sampleRate*.055),audioContext.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,3);const source=audioContext.createBufferSource(),g=audioContext.createGain();source.buffer=buffer;g.gain.value=.22;source.connect(g);g.connect(audioContext.destination);source.start(t);note(210,t,.08,.10);if(kind==='homer')[392,494,587,784].forEach((f,i)=>note(f,t+.1+i*.095,.18,.055));}else note(160,t,.09,.045);
+ }catch(e){/* Silent play remains fully usable on devices without audio. */}}
+
+ function notifyFinish(){if(!finishedNotified&&state.status==='finished'){finishedNotified=true;if(api.onFinish)api.onFinish(summary(state));}}
+ function setMessage(head,body=''){call.textContent=head;tip.textContent=body;}
+ function updateScore(){
+  const betweenInnings=result&&result.endedInning&&(phase==='result'||phase==='opponent');const displayInning=betweenInnings?result.inning:state.inning,displayOuts=betweenInnings?(result.runLimit?result.before.outs:3):state.outs;
+  $('[data-score="home"]').textContent=state.runs;$('[data-score="away"]').textContent=state.opponentRuns;$('[data-inning]').textContent=displayInning+' / 3';
+  $('.bb-lights').innerHTML=`<span>${L('OUTS','OUTS')}</span>`+[0,1,2].map(i=>`<i class="${i<displayOuts?'on':''}"></i>`).join('');$('.bb-lights').setAttribute('aria-label',displayOuts+' '+L('outs','outs'));
+  $('.bb-strikes').textContent=L('Strikes: ','Strikes: ')+state.strikes+' / 3';$('.bb-bases').textContent=L('On base: ','En bases: ')+state.bases.filter(Boolean).length;
+  $('.bb-sound').textContent=state.sound?L('Sound on','Con sonido'):L('Sound off','Sin sonido');$('.bb-sound').setAttribute('aria-pressed',String(!!state.sound));
+  $('.bb-speed-label').textContent=state.difficulty==='rookie'?L('ROOKIE','PRINCIPIANTE'):L('ALL-STAR','ESTRELLA');
+  all('[data-speed]').forEach(b=>{b.setAttribute('aria-pressed',String(b.dataset.speed===state.difficulty));b.disabled=phase!=='ready'||paused||state.status==='finished';});
+  const table=document.createElement('table');table.innerHTML=`<thead><tr><th>${L('Team','Equipo')}</th><th>1</th><th>2</th><th>3</th><th>${L('Runs','Carreras')}</th></tr></thead><tbody><tr><th class="bb-box-name"></th>${state.playerByInning.map(n=>'<td>'+(n===null?'–':n)+'</td>').join('')}<td>${state.runs}</td></tr><tr><th>${L('Comets','Cometas')}</th>${state.opponentByInning.map(n=>'<td>'+(n===null?'–':n)+'</td>').join('')}<td>${state.opponentRuns}</td></tr></tbody>`;table.querySelector('.bb-box-name').textContent=name;$('.bb-boxscore').replaceChildren(table);
+ }
+ function ready(){phase='ready';elapsed=0;swingAt=-1;flight=null;result=null;banner.hidden=true;action.disabled=false;action.classList.remove('bb-is-swing');action.textContent=L('Pitch to me','Lánzame');setMessage(L('Step up to the plate!','¡Prepárate para batear!'),L('Watch the ball. Swing at the glowing ring.','Mira la pelota. Batea cuando llegue al aro.'));updateScore();}
+ function startPitch(){if(state.sound)sound('ready');if(disposed||paused||state.status==='finished'||phase!=='ready')return;phase='windup';elapsed=0;swingAt=-1;const speedVariation=((state.seed+state.pitches*83)%7)*32;pitchDuration=(state.difficulty==='rookie'?1900:1450)+speedVariation;action.textContent=L('SWING!','¡BATEAR!');action.classList.add('bb-is-swing');setMessage(L('Here comes the pitch…','Ahí viene la pelota…'),L('Wait for the ball to reach the ring.','Espera a que la pelota llegue al aro.'));updateScore();}
+ function swing(){if(disposed||paused||state.status==='finished')return;if(phase==='ready'){startPitch();return;}if(phase!=='windup'&&phase!=='pitch')return;swingAt=0;const fraction=phase==='windup'?-.6:elapsed/pitchDuration;const offset=fraction-1;resolve(timingOutcome(offset,state.difficulty),offset);}
+ function resolve(outcome,offset){
+  const resolved=applyPlay(state,outcome);state=resolved.state;result=resolved.event;result.offset=offset;phase='result';elapsed=0;save();updateScore();action.disabled=true;action.textContent=L('Ball in play…','Jugada en marcha…');
+  if(['single','double','triple','homer','flyout','groundout','foul'].includes(outcome))sound(outcome==='homer'?'homer':'hit');
+  const phrase=labels[result.outcome]||labels.strike;const head=L(...phrase);let body='';
+  if(['strike','strikeout','foul'].includes(result.outcome))body=offset<0?L('A little early. Let the ball get closer.','Un poco pronto. Deja que la pelota se acerque.'):L('A little late. Try swinging sooner.','Un poco tarde. Intenta batear antes.');
+  else if(result.runs)body=result.runs+' '+L(result.runs===1?'run scores!':'runs score!',result.runs===1?'¡carrera!':'¡carreras!');
+  else body=L('Keep your eye on the next pitch.','Sigue mirando la próxima pelota.');
+  setMessage(head,body);banner.textContent=head;banner.dataset.kind=result.outcome;banner.hidden=false;
+  const side=((state.pitches*19)%11-5)/5;flight={outcome:result.outcome,target:{x:500+side*250,y:result.outcome==='homer'?155:result.outcome==='triple'?215:result.outcome==='double'?265:result.outcome==='single'?305:result.outcome==='flyout'?280:390},duration:result.outcome==='homer'?2350:1800};
+ }
+ function afterResult(){
+  if(result&&result.endedInning){phase='opponent';elapsed=0;banner.hidden=true;action.textContent=L('Comets are batting…','Batean los Cometas…');setMessage(result.runLimit?L('Five-run inning! Teams switch.','¡Cinco carreras! Cambio de turno.'):L('Three outs! Teams switch.','¡Tres outs! Cambio de turno.'),L('The Comets take their automatic turn.','Los Cometas juegan su turno automático.'));}
+  else ready();
+ }
+ function finish(){phase='finished';banner.hidden=true;action.disabled=true;action.textContent=L('Game complete','Partido terminado');updateScore();notifyFinish();showFinish();}
+ function showFinish(){$('.mll-ballpark').classList.add('bb-game-done');$('.bb-stadium-wrap').classList.add('bb-finished');const tied=state.runs===state.opponentRuns,won=state.runs>state.opponentRuns;overlay.hidden=false;overlayCard.innerHTML=`<span class="bb-trophy" aria-hidden="true">${won?'★':'⚾'}</span><p class="bb-kicker">${L('FINAL SCORE','MARCADOR FINAL')}</p><h2>${won?L('You win!','¡Ganaste!'):tied?L('A great tie!','¡Un gran empate!'):L('Good game!','¡Buen partido!')}</h2><p class="bb-final-score">${state.runs}<span>–</span>${state.opponentRuns}</p><p>${state.hits} ${L('hits','hits')} · ${state.homeRuns} ${L('home runs','jonrones')}</p><button class="bb-primary bb-finish-exit" type="button">${L('Back to the learning lab','Volver al laboratorio')}</button>`;overlayCard.querySelector('button').onclick=()=>api.onExit&&api.onExit();setMessage(L('Three innings in the books!','¡Terminaste las tres entradas!'),L('More learning earns your next ticket.','Aprende más para ganar tu próximo boleto.'));}
+ function pause(){if(disposed||paused||phase==='finished')return;paused=true;$('.bb-stadium-wrap').classList.add('bb-paused');save();overlay.hidden=false;overlayCard.innerHTML=`<span class="bb-trophy" aria-hidden="true">Ⅱ</span><h2>${L('Time out!','¡Tiempo fuera!')}</h2><p>${L('Your game is saved. Ready when you are.','Tu partido está guardado. Sigue cuando quieras.')}</p><button class="bb-primary bb-resume" type="button">${L('Resume game','Continuar partido')}</button>`;overlayCard.querySelector('button').onclick=resume;action.disabled=true;$('.bb-pause').textContent=L('Resume','Continuar');updateScore();}
+ function resume(){if(!paused)return;paused=false;$('.bb-stadium-wrap').classList.remove('bb-paused');last=0;overlay.hidden=true;action.disabled=phase==='result'||phase==='opponent';$('.bb-pause').textContent=L('Pause','Pausa');updateScore();}
+ function visibility(){if(document.hidden)pause();}
+ function key(e){if(e.code!=='Space'||e.repeat||/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName))return;if(e.target.tagName==='BUTTON')return;e.preventDefault();swing();}
+ action.addEventListener('click',swing);canvas.addEventListener('click',e=>{if(e.button!==0)return;e.preventDefault();swing();});$('.bb-sound').onclick=()=>{state.sound=!state.sound;if(state.sound)sound('ready');save();updateScore();};$('.bb-exit').onclick=()=>{save();if(api.onExit)api.onExit();};$('.bb-pause').onclick=()=>paused?resume():pause();$('.bb-rules-button').onclick=()=>{const b=$('.bb-rules-button'),open=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',String(open));$('.bb-rules').hidden=!open;};all('[data-speed]').forEach(b=>b.onclick=()=>{if(phase!=='ready'||paused)return;state.difficulty=b.dataset.speed;save();updateScore();});document.addEventListener('visibilitychange',visibility);document.addEventListener('keydown',key);
+ // Original stadium illustration. All drawing coordinates use a stable 1000 × 650 field.
+ const field={home:{x:500,y:555},first:{x:695,y:426},second:{x:500,y:306},third:{x:305,y:426},pitcher:{x:500,y:412}};
+ function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill();}
+ function line(points,color,width=3){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();}
+ function poly(points,color){ctx.fillStyle=color;ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill();}
+ function roundRect(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,r):ctx.rect(x,y,w,h);ctx.fill();}
+ function person(x,y,scale,team,pose=0,bat=false){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ellipse(0,2,12,4,'#10282444');ctx.lineCap='round';const uniform=team==='home'?'#ffcf66':'#eeeef6',dark=team==='home'?'#163a63':'#315b93';line([{x:-4,y:-11},{x:-6-pose*4,y:0}],dark,6);line([{x:4,y:-11},{x:7+pose*5,y:0}],dark,6);roundRect(-9,-31,18,23,5,uniform);line([{x:-7,y:-27},{x:-15-pose*6,y:-16-pose*12}],uniform,6);line([{x:7,y:-27},{x:14+pose*9,y:-22-pose*15}],uniform,6);ellipse(0,-39,9,10,'#c68e63');ellipse(0,-44,10,5,dark);roundRect(-1,-45,16,4,2,dark);if(bat){ctx.save();ctx.translate(13,-24);ctx.rotate(-.55+pose*2.8);line([{x:0,y:0},{x:0,y:-39}],'#edb56e',6);ctx.restore();}ctx.restore();}
+ function base(p,active){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(Math.PI/4);roundRect(-7,-7,14,14,1,active?'#ffda6a':'#fff8e5');ctx.restore();if(active){ellipse(p.x,p.y-26,12,12,'#ffda6a');ctx.fillStyle='#17314d';ctx.font='bold 14px system-ui';ctx.textAlign='center';ctx.fillText('●',p.x,p.y-21);}}
+ function stadium(t){
+  const sky=ctx.createLinearGradient(0,0,0,650);sky.addColorStop(0,'#102f5b');sky.addColorStop(.45,'#4c8299');sky.addColorStop(1,'#091d34');ctx.fillStyle=sky;ctx.fillRect(0,0,1000,650);
+  ellipse(840,89,39,39,'#fbcf91');for(let i=0;i<11;i++){const x=i*107+14,h=35+(i*71)%61;roundRect(x,179-h,53,h,3,'#173b59');roundRect(x+8,185-h,4,5,1,'#608899');}
+  poly([{x:0,y:180},{x:170,y:115},{x:500,y:96},{x:830,y:115},{x:1000,y:180},{x:1000,y:298},{x:0,y:298}],'#172c45');
+  for(let row=0;row<5;row++){const y=158+row*18;line([{x:30,y:y+30},{x:225,y:y},{x:775,y:y},{x:970,y:y+30}],'#254058',7);for(let c=0;c<49;c++){const x=26+c*20,y2=y+Math.pow((x-500)/500,2)*29;ellipse(x,y2,3.2,3.2,['#efad6a','#83b5c1','#fff0c9','#587899'][(c*7+row*3)%4]);}}
+  [95,905].forEach(x=>{line([{x,y:245},{x,y:68}],'#b2c4c8',5);roundRect(x-32,58,64,18,4,'#d4dfe0');for(let j=0;j<4;j++)roundRect(x-28+j*15,62,10,10,2,'#fff2ba');if(!reduced){const g=ctx.createRadialGradient(x,69,5,x,100,160);g.addColorStop(0,'#fff5b52c');g.addColorStop(1,'#fff5b500');ctx.fillStyle=g;ctx.fillRect(x-160,60,320,190);}});
+  roundRect(398,126,204,64,6,'#081e31');ctx.fillStyle='#f3d57e';ctx.textAlign='center';ctx.font='bold 15px system-ui';ctx.fillText(L('LEARNING LEAGUE','LIGA DEL APRENDIZAJE'),500,149);ctx.fillStyle='#d5f8e2';ctx.font='bold 21px monospace';ctx.fillText(String(state.runs).padStart(2,'0')+'  —  '+String(state.opponentRuns).padStart(2,'0'),500,177);
+  // Dark outfield wall and curved turf.
+  ctx.fillStyle='#194c49';ctx.beginPath();ctx.ellipse(500,539,574,332,0,Math.PI,2*Math.PI);ctx.lineTo(1074,650);ctx.lineTo(-74,650);ctx.fill();
+  ctx.strokeStyle='#e5b96f';ctx.lineWidth=8;ctx.beginPath();ctx.ellipse(500,539,573,330,0,Math.PI,2*Math.PI);ctx.stroke();
+  ctx.save();ctx.beginPath();ctx.ellipse(500,555,560,323,0,Math.PI,2*Math.PI);ctx.lineTo(1060,650);ctx.lineTo(-60,650);ctx.clip();ctx.fillStyle='#347951';ctx.fillRect(0,220,1000,430);
+  for(let i=-6;i<9;i++){poly([{x:500+i*120,y:215},{x:500+i*120+60,y:215},{x:500+i*180+90,y:650},{x:500+i*180,y:650}],'#3c8257');}ctx.restore();
+  // The infield uses the same diamond geometry as the base-running engine.
+  poly([{x:500,y:284},{x:737,y:426},{x:500,y:585},{x:263,y:426}],'#c99366');poly([{x:500,y:325},{x:663,y:426},{x:500,y:534},{x:337,y:426}],'#438857');
+  line([{x:118,y:309},field.home,{x:882,y:309}],'#fcf3d4',3);line([field.home,field.first,field.second,field.third,field.home],'#eac297',5);
+  ellipse(500,420,40,21,'#c99366');roundRect(489,406,22,6,1,'#fff6df');ellipse(500,555,63,25,'#c99366');
+  const shown=result&&phase==='result'?result.before.bases:state.bases;base(field.first,shown[0]);base(field.second,shown[1]);base(field.third,shown[2]);poly([{x:491,y:548},{x:509,y:548},{x:511,y:558},{x:500,y:566},{x:489,y:558}],'#fff9e8');
+  // Target ring belongs to the plate, not an unrelated timing meter.
+  const ratio=phase==='pitch'?elapsed/pitchDuration:0;const hot=phase==='pitch'&&Math.abs(ratio-1)<.14;ctx.strokeStyle=hot?'#ffe07b':'#c1fbe5';ctx.lineWidth=hot?5:3;ctx.globalAlpha=phase==='windup'||phase==='pitch'?1:.55;ctx.beginPath();ctx.ellipse(500,529,27,15,0,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+  // Fielders react to the ball and its landing point.
+  const positions=[{x:326,y:344},{x:647,y:343},{x:223,y:274},{x:501,y:260},{x:791,y:274},{x:691,y:411}];positions.forEach((p,i)=>{let x=p.x,y=p.y;if(phase==='result'&&flight&&!['strike','strikeout','foul'].includes(flight.outcome)){const q=Math.min(elapsed/flight.duration,1);const selected=flight.target.x<420?2:flight.target.x>600?4:3;if(i===selected){x+=(flight.target.x-x)*q*.8;y+=(flight.target.y-y)*q*.8;}}person(x,y,.62,'away');});
+  let pose=phase==='windup'?Math.sin(Math.min(elapsed/720,1)*Math.PI):phase==='pitch'?Math.max(0,1-elapsed/400):0;person(500,405,.95,'away',pose);
+  const swingPose=swingAt>=0?Math.sin(Math.min(swingAt/330,1)*Math.PI):0;person(452,574,1.5,'home',swingPose,true);person(526,593,.78,'away',.1);
+  // Batting-box chalk and foreground stadium rail give depth.
+  line([{x:437,y:541},{x:472,y:541},{x:472,y:584},{x:437,y:584},{x:437,y:541}],'#fff3d780',2);
+  if(phase==='windup'){const hand={x:514+pose*9,y:381-pose*15};ball(hand.x,hand.y,5);}
+  if(phase==='pitch'){
+   const q=clamp(elapsed/pitchDuration,0,1.28),x=500+Math.sin(q*Math.PI)*((state.pitches%3)-1)*14,y=374+155*Math.pow(q,1.35);ellipse(x,y+30,5+q*8,3+q*3,'#0a263633');line([{x:x-2,y:y-18},{x,y}],'#fff5d275',3);ball(x,y,5+q*9);
+  }
+  if(phase==='result'&&flight){
+   const q=clamp(elapsed/flight.duration,0,1);if(!['strike','strikeout'].includes(flight.outcome)){
+    const end=flight.outcome==='foul'?{x:flight.target.x>500?1040:-40,y:380}:flight.target;const x=500+(end.x-500)*q,y=529+(end.y-529)*q-Math.sin(q*Math.PI)*(flight.outcome==='homer'?195:flight.outcome==='groundout'?5:90);
+    ellipse(x,529+(end.y-529)*q+15,8-q*4,3,'#133c3544');const trailQ=Math.max(0,q-.06);line([{x:500+(end.x-500)*trailQ,y:529+(end.y-529)*trailQ-Math.sin(trailQ*Math.PI)*(flight.outcome==='homer'?195:flight.outcome==='groundout'?5:90)},{x,y}],'#fff9d888',3);ball(x,y,12-q*8);
+   }
+   const n={single:1,double:2,triple:3,homer:4}[result.outcome];if(n){const route=[field.home,field.first,field.second,field.third,field.home];const run=(start)=>{const dist=q*n,seg=Math.floor(dist),fract=dist-seg;const idx=start+seg;if(idx>=4)return;const a=route[idx],b=route[idx+1];person(a.x+(b.x-a.x)*fract,a.y+(b.y-a.y)*fract,.67,'home',Math.sin(t/60)*.3);};run(0);result.before.bases.forEach((yes,i)=>{if(yes)run(i+1);});}
+   if(result.outcome==='homer'&&!reduced){for(let i=0;i<25;i++){const x=(i*137+elapsed*.1)%1000,y=(i*93+elapsed*.06)%360;ctx.fillStyle=['#ffdb7e','#e6f7f0','#77c3c5'][i%3];ctx.fillRect(x,y,5,8);}}
+  }
+  if(phase==='opponent'){const q=(elapsed%900)/900;ball(500,380+q*135,5+q*8);ctx.fillStyle='#061a2eb8';ctx.fillRect(260,451,480,79);ctx.fillStyle='#ffdf94';ctx.font='bold 24px system-ui';ctx.textAlign='center';ctx.fillText(L('COMETS AT BAT','BATEAN LOS COMETAS'),500,483);ctx.fillStyle='#fff9e9';ctx.font='18px system-ui';ctx.fillText(elapsed>1050?(result.opponentAdded+' '+L(result.opponentAdded===1?'run scored':'runs scored',result.opponentAdded===1?'carrera':'carreras')):L('Your fielders take their turn…','Tus jugadores defienden…'),500,512);}
+  // Rail drawn last keeps the illustrated ballpark feeling like a place.
+  ctx.fillStyle='#102737';ctx.fillRect(0,628,1000,22);ctx.fillStyle='#496b73';ctx.fillRect(0,628,1000,4);for(let i=0;i<11;i++)roundRect(i*100+25,632,4,18,1,'#294650');
+ }
+ function ball(x,y,r){ellipse(x+2,y+3,r,r,'#10243b35');ellipse(x,y,r,r,'#fffbea');ctx.strokeStyle='#d15d55';ctx.lineWidth=Math.max(1,r*.12);ctx.beginPath();ctx.arc(x-r*.55,y,r*.72,-.95,.95);ctx.stroke();ctx.beginPath();ctx.arc(x+r*.55,y,r*.72,Math.PI-.95,Math.PI+.95);ctx.stroke();}
+ function animate(now){if(disposed)return;const dt=last?Math.min(60,now-last):0;last=now;if(!paused){elapsed+=dt;if(swingAt>=0)swingAt+=dt;if(phase==='windup'&&elapsed>=720){phase='pitch';elapsed=0;}else if(phase==='pitch'&&elapsed>pitchDuration*1.33){swingAt=-1;resolve('strike',.4);}else if(phase==='result'&&elapsed>(flight?flight.duration:1800)+420){afterResult();}else if(phase==='opponent'&&elapsed>2450){if(state.status==='finished')finish();else ready();}stadium(now);}frame=requestAnimationFrame(animate);}
+ ready();save();if(state.status==='finished')finish();frame=requestAnimationFrame(animate);
+ return {dispose(){if(disposed)return;disposed=true;save();cancelAnimationFrame(frame);if(audioContext)audioContext.close().catch(()=>{});document.removeEventListener('visibilitychange',visibility);document.removeEventListener('keydown',key);},pause,saveState(){save();return clone(state);},getState:()=>clone(state)};
+}
+window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summary}};
+})();
+
+;
 /* Max's Learning Lab — edit content in data/, not in this application shell. */
 (function () {
   'use strict';
@@ -4153,7 +4318,7 @@ window.MLL_ES_B = [
   loadContent();
   const view = document.getElementById('view');
   const STORAGE = 'max-learning-lab-v1';
-  const empty = () => ({version:1,name:config.name,badge:config.badges[0],visited:[],stamps:[],quiz:[],badges:{},deck:[],lastSurprise:null,games:{},answers:[],voice:{},completedTasks:[]});
+  const empty = () => ({version:1,name:config.name,badge:config.badges[0],visited:[],stamps:[],quiz:[],badges:{},deck:[],lastSurprise:null,games:{},answers:[],voice:{},completedTasks:[],baseball:{spent:0,started:0,finished:0,active:null,lastResult:null},scoringVersion:2,legacyPoints:0,pointEvents:[],claimedItems:[]});
   let memoryOnly=false;
   function normalize(input) {
     const next=empty();if(!input||typeof input!=='object')return next;
@@ -4163,27 +4328,81 @@ window.MLL_ES_B = [
     if(Array.isArray(input.quiz))next.quiz=[...new Set(input.quiz.filter(id=>typeof id==='string'&&id.length<70))];
     if(input.badges&&typeof input.badges==='object')for(const[k,v]of Object.entries(input.badges))if(typeof v==='string'&&k.length<60)next.badges[k]=v.slice(0,90);
     if(input.games&&typeof input.games==='object'&&!Array.isArray(input.games))next.games=input.games;
-    if(Array.isArray(input.answers))next.answers=[...new Set(input.answers.filter(id=>typeof id==='string'&&/^(person|place|practice):[a-z0-9:._-]{1,160}$/.test(id)))].slice(0,10000);
+    if(Array.isArray(input.answers))next.answers=[...new Set(input.answers.filter(id=>typeof id==='string'&&/^(person|place|practice):[a-z0-9:._-]{1,160}$/.test(id)))].slice(0,100000);
     else next.answers=next.quiz.filter(id=>byId.has(id)||english.people.some(p=>p.id===id)).map(id=>(byId.has(id)?'place:':'person:')+id+':1');
     if(input.voice&&typeof input.voice==='object')for(const lang of ['en','es'])if(typeof input.voice[lang]==='string')next.voice[lang]=input.voice[lang].slice(0,500);
     if(Array.isArray(input.completedTasks))next.completedTasks=[...new Set(input.completedTasks.filter(id=>validTasks.has(id)))];
+    next.baseball=normalizeBaseball(input.baseball);
+    migrateScoring(input,next);
     next.deck=next.deck.filter(id=>surprises.some(p=>p.id===id));
     if(byId.has(input.lastSurprise))next.lastSurprise=input.lastSurprise;
     return next;
   }
   let state;try{state=normalize(JSON.parse(localStorage.getItem(STORAGE)));}catch(e){state=empty();memoryOnly=true;}
-  let dispose=null,toastTimer,readingButton=null,routeToken=0,celebrationTimer=null;
+  let dispose=null,toastTimer,readingButton=null,routeToken=0,celebrationTimer=null,preserveActivitySelection=false;
   const $=id=>document.getElementById(id);
   function save(){try{localStorage.setItem(STORAGE,JSON.stringify(state));}catch(e){if(!memoryOnly)toast('Progress can’t be saved in this browser.');memoryOnly=true;}updateHeader();}
-  function answer(id){if(state.answers.includes(id))return false;state.answers.push(id);save();celebrate(10);return true;}
-  function points(){return state.answers.length*10+state.completedTasks.length;}
+  function answer(id){if(state.answers.includes(id))return false;state.answers.push(id);const fresh=addPoint('answer:'+id);save();celebrate(fresh?1:0);return fresh;}
+  function points(){return state.legacyPoints+state.pointEvents.length;}
   function dismissCelebration(){clearTimeout(celebrationTimer);document.getElementById('task-celebration')?.remove();}
-  function celebrate(amount=1){
+  function celebrate(amount=1,message){
     dismissCelebration();const box=el('div','task-celebration');box.id='task-celebration';box.setAttribute('role','status');box.setAttribute('aria-live','polite');
-    const star=el('span','celebration-star','✦');star.setAttribute('aria-hidden','true');box.append(star,el('strong','',amount?l('+'+amount+' '+(amount===1?'point!':'points!'),'¡+'+amount+' '+(amount===1?'punto!':'puntos!')):l('Great practice!','¡Muy buena práctica!')),el('span','celebration-caption',l('Look what you can do.','¡Mira lo que puedes hacer!')));
+    const star=el('span','celebration-star','✦');star.setAttribute('aria-hidden','true');box.append(star,el('strong','',message||(amount?l('+'+amount+' '+(amount===1?'point!':'points!'),'¡+'+amount+' '+(amount===1?'punto!':'puntos!')):l('Great practice!','¡Muy buena práctica!'))),el('span','celebration-caption',l('Look what you can do.','¡Mira lo que puedes hacer!')));
     for(let i=0;i<14;i++){const bit=el('i','celebration-bit');bit.setAttribute('aria-hidden','true');bit.style.setProperty('--i',i);bit.style.setProperty('--x',((i*71)%280-140)+'px');bit.style.setProperty('--y',(-55-(i*31)%120)+'px');bit.style.setProperty('--r',(i*53)+'deg');box.append(bit);}document.body.append(box);celebrationTimer=setTimeout(dismissCelebration,2600);
   }
-  function completeTask(id){if(!validTasks.has(id))return false;const fresh=!state.completedTasks.includes(id);if(fresh){state.completedTasks.push(id);save();}celebrate(fresh?1:0);return fresh;}
+  function completeTask(id){if(!validTasks.has(id))return false;const fresh=!state.completedTasks.includes(id);let earned=false;if(fresh){state.completedTasks.push(id);if(id.startsWith('draw:'))earned=addPoint('task:'+id);save();}celebrate(earned?1:0,fresh&&!id.startsWith('draw:')?l('Puzzle complete!','¡Completaste el reto!'):null);return fresh;}
+  function pointEvents(){return state.pointEvents;}
+  function addPoint(event){if(state.pointEvents.includes(event))return false;state.pointEvents.push(event);return true;}
+  function validFoundItem(id){
+    if(typeof id!=='string')return false;
+    const word=/^wordsearch:(en|es):(\d{3}):([0-9])$/.exec(id);
+    if(word)return +word[2]>=1&&+word[2]<=100;
+    const spy=/^spy:(\d{3}):([a-z0-9-]+)$/.exec(id);
+    return !!(spy&&+spy[1]>=1&&+spy[1]<=40&&art.some(a=>a.id===spy[2]));
+  }
+  function validPointEvent(id){
+    if(typeof id!=='string')return false;
+    if(id.startsWith('item:'))return validFoundItem(id.slice(5));
+    if(id.startsWith('task:draw:'))return validTasks.has(id.slice(5));
+    return /^answer:(person|place|practice):[a-z0-9:._-]{1,160}$/.test(id);
+  }
+  function migrateScoring(input,next){
+    next.scoringVersion=2;
+    if(input.scoringVersion===2){
+      next.legacyPoints=Number.isSafeInteger(input.legacyPoints)&&input.legacyPoints>=0?Math.min(10000000,input.legacyPoints):0;
+      next.pointEvents=Array.isArray(input.pointEvents)?[...new Set(input.pointEvents.filter(validPointEvent))].slice(0,100000):[];
+      next.claimedItems=Array.isArray(input.claimedItems)?[...new Set(input.claimedItems.filter(validFoundItem))].slice(0,10000):[];
+      return;
+    }
+    // Honor the previous scoring rules once. Future correct actions each earn one.
+    next.legacyPoints=next.answers.length*10+next.completedTasks.length;
+    next.pointEvents=[];next.claimedItems=[];
+    for(const[key,value]of Object.entries(next.games)){
+      if(!value||typeof value!=='object'||!Array.isArray(value.found))continue;
+      if(/^wordsearch:(en|es):\d{3}$/.test(key))for(const found of value.found){const id=key+':'+found.index;if(validFoundItem(id))next.claimedItems.push(id);}
+      const spy=/^spy:progress:(\d+)$/.exec(key);
+      if(spy)for(const item of value.found){const id='spy:'+spy[1].padStart(3,'0')+':'+item;if(validFoundItem(id))next.claimedItems.push(id);}
+    }
+    next.claimedItems=[...new Set(next.claimedItems)];
+  }
+  function findItem(id){
+    if(!validFoundItem(id)||state.claimedItems.includes(id))return false;
+    const parent=id.slice(0,id.lastIndexOf(':'));
+    if(state.completedTasks.includes(parent))return false;
+    state.claimedItems.push(id);const fresh=addPoint('item:'+id);save();
+    if(fresh)toast(l('+1 learning point!','¡+1 punto de aprendizaje!'));
+    return fresh;
+  }
+  function nextRandom(key,values){
+    const ids=[...new Set(values)];if(!ids.length)return undefined;
+    const all=state.games.randomDecks&&typeof state.games.randomDecks==='object'&&!Array.isArray(state.games.randomDecks)?state.games.randomDecks:{};
+    const previous=all[key]&&typeof all[key]==='object'?all[key]:{},allowed=new Set(ids);
+    let deck=Array.isArray(previous.deck)?[...new Set(previous.deck)].filter(id=>allowed.has(id)):[];
+    if(!deck.length)deck=shuffle(ids);
+    if(deck.length>1&&deck[deck.length-1]===previous.last)[deck[0],deck[deck.length-1]]=[deck[deck.length-1],deck[0]];
+    const chosen=deck.pop();all[key]={deck,last:chosen};state.games.randomDecks=all;save();return chosen;
+  }
+
   function personDone(p){return [1,2].every(n=>state.answers.includes('person:'+p.id+':'+n));}
   function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=t(text);return n;}
   function button(text,cls,fn){const b=el('button',cls||'button',text);b.type='button';if(fn)b.addEventListener('click',fn);return b;}
@@ -4192,7 +4411,7 @@ window.MLL_ES_B = [
   function heading(kicker,title,description){const row=el('div','page-heading'),text=el('div');text.append(el('p','eyebrow',kicker),el('h1','',title));if(description)text.append(el('p','',description));row.append(text);return row;}
   function topNav(back='#home',label='← Explore the lab'){const n=el('nav','page-nav');n.setAttribute('aria-label',t('Activity navigation'));n.append(link(label,back,'back-link'));if(back!=='#home')n.append(link('⌂ Home','#home','button small ghost'));view.append(n);return n;}
   function toast(text){clearTimeout(toastTimer);$('toast').textContent=t(text);$('toast').classList.add('show');toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3300);}
-  function updateHeader(){ $('brand-name').textContent=l(state.name.toUpperCase()+"'S",state.name.toUpperCase());$('avatar-symbol').textContent=state.badge;$('nav-count').textContent=state.visited.length;const score=$('header-points');if(score){score.textContent='★ '+points();score.setAttribute('aria-label',l(points()+' learning points',points()+' puntos de aprendizaje'));}const total=$('collection-totals');if(total)total.textContent=l(places.length+' places. '+people.length+' remarkable people. Seven learning tools.',places.length+' lugares. '+people.length+' personas extraordinarias. Siete herramientas de aprendizaje.'); }
+  function updateHeader(){ $('brand-name').textContent=l(state.name.toUpperCase()+"'S",state.name.toUpperCase());$('avatar-symbol').textContent=state.badge;$('nav-count').textContent=state.visited.length;const score=$('header-points');if(score){score.textContent='★ '+points();score.setAttribute('aria-label',l(points()+' learning points',points()+' puntos de aprendizaje'));}const total=$('collection-totals');if(total)total.textContent=l(places.length+' places. '+people.length+' remarkable people. Seven learning tools and earned baseball games.',places.length+' lugares. '+people.length+' personas extraordinarias. Siete herramientas de aprendizaje y partidas de béisbol como premio.'); }
   function stopReading(){if('speechSynthesis'in window)window.speechSynthesis.cancel();if(readingButton){readingButton.classList.remove('listen-on');readingButton.textContent=readingButton.dataset.beforeReading||t('◖ Listen');readingButton=null;}}
   let voices=[];function refreshVoices(){if('speechSynthesis' in window)voices=window.speechSynthesis.getVoices();}
   refreshVoices();if('speechSynthesis' in window)window.speechSynthesis.addEventListener('voiceschanged',refreshVoices);
@@ -4237,18 +4456,19 @@ window.MLL_ES_B = [
     const c=el('div','place-card-copy');c.append(el('p','eyebrow',l('50 CITIES · ONE SURPRISE','50 CIUDADES · UNA SORPRESA')),el('h2','',l('Randomizer','Destino sorpresa')),el('p','',l('Where will you go? Tap to find out.','¿Adónde irás? Toca para descubrirlo.')));b.append(c,el('span','card-arrow','→'));return b;
   }
   function questionBank(){return [...people.flatMap(p=>[p.quiz,p.quiz2].filter(Boolean).map((q,i)=>({...q,id:'person:'+p.id+':'+(i+1),question:p.name+': '+q.question,clue:p.facts.join(' ')}))),...places.flatMap(p=>[p.quiz,p.quiz2].filter(Boolean).map((q,i)=>({...q,id:'place:'+p.id+':'+(i+1),question:p.name+': '+q.question,clue:p.facts.join(' ')})))];}
+  function nextHomePlace(){const id=nextRandom('home:places',places.filter(p=>photos[p.id]?.src).map(p=>p.id));state.games.homePlaceLast=id;return byId.get(id);}
   function home(){
     view.classList.add('discovery-home');document.title=l(state.name+"'s Learning Lab",'El laboratorio de '+state.name);
-    const featurePool=people.filter(p=>p.id!=='lionel-messi');let index=Number(state.games.homePersonIndex);if(!Number.isInteger(index))index=featurePool.findIndex(p=>p.id==='neil-armstrong')-1;index=(index+1+featurePool.length)%featurePool.length;state.games.homePersonIndex=index;save();const featured=featurePool[index];
+    const featurePool=people.filter(p=>p.id!=='lionel-messi');const personId=nextRandom('home:people',featurePool.map(p=>p.id));const featured=featurePool.find(p=>p.id===personId);const featuredPlace=nextHomePlace();save();
     const paths=el('section','discovery-paths');paths.setAttribute('aria-label',l('Explore the lab','Explora el laboratorio'));
-    const first=link('','#map','discovery-card locations-card');first.append(picture(byId.get('hawaii'),'discovery-photo',false));const c=el('div','discovery-copy');c.append(el('h1','',l('Explore amazing locations','Explora lugares increíbles')),el('p','',l('Tap the map. Find your next adventure.','Toca el mapa. Encuentra tu próxima aventura.')));first.append(c,el('span','card-arrow','→'));
+    const first=link('','#map','discovery-card locations-card');first.dataset.featuredPlace=featuredPlace.id;first.append(picture(featuredPlace,'discovery-photo',false));const c=el('div','discovery-copy');c.append(el('h1','',l('Explore amazing locations','Explora lugares increíbles')),el('strong','featured-name featured-location',featuredPlace.name),el('p','',l('Tap the map. Find your next adventure.','Toca el mapa. Encuentra tu próxima aventura.')));first.append(c,el('span','card-arrow','→'));
     const second=link('','#people','discovery-card people-feature');second.append(picture(featured,'discovery-photo',false));const pc=el('div','discovery-copy');pc.append(el('h2','',l('Remarkable people','Personas extraordinarias')),el('strong','featured-name',featured.name),el('p','',l('Meet extraordinary people.','Conoce personas extraordinarias.')));second.append(pc,el('span','card-arrow','→'));paths.append(first,second);view.append(paths);
     const practiceHead=el('div','section-head');practiceHead.append(el('h2','',l('Play & learn','Juega y aprende')));view.append(practiceHead);
     const grid=el('div','activity-tiles');
-    for(const[id,en,es]of [['wordsearch','Word Search','Sopa de letras'],['spy','I Spy','Veo, veo'],['hangman','Hangman','Ahorcado'],['math','Math','Matemáticas'],['draw','Draw & Discover','Dibuja y descubre'],['quiz','Quiz','Preguntas'],['spelling','Spelling Bee','Concurso de palabras']]){
-      const a=link('','#'+id,'activity-tile activity-'+id),thumb=el('div','activity-thumb');thumb.setAttribute('aria-hidden','true');thumb.innerHTML=window.MLL_HOME_THUMBS?.[id==='wordsearch'&&I.lang==='es'?'wordsearchEs':id]||'';const caption=el('div','activity-caption');caption.append(el('h3','',l(en,es)),el('span','card-arrow','→'));a.append(thumb,caption);grid.append(a);
+    for(const[id,en,es]of [['wordsearch','Word Search','Sopa de letras'],['spy','I Spy','Veo, veo'],['hangman','Hangman','Ahorcado'],['math','Math','Matemáticas'],['draw','Draw & Discover','Dibuja y descubre'],['quiz','Quiz','Preguntas'],['spelling','Spelling Bee','Concurso de palabras'],['baseball','Baseball','Béisbol']]){
+      const a=link('','#'+id,'activity-tile activity-'+id),thumb=el('div','activity-thumb');thumb.setAttribute('aria-hidden','true');thumb.innerHTML=window.MLL_HOME_THUMBS?.[id==='wordsearch'&&I.lang==='es'?'wordsearchEs':id]||'';const caption=el('div','activity-caption');caption.append(el('h3','',l(en,es)),el('span','card-arrow','→'));if(id==='baseball')caption.append(el('span','activity-price',state.baseball.active?l('Resume your game','Continúa tu partida'):l('10 points per game','10 puntos por partida')));a.append(thumb,caption);grid.append(a);
     }view.append(grid);
-    const progress=el('details','home-progress'),summary=el('summary','',l('My learning scoreboard','Mi marcador de aprendizaje'));progress.append(summary);const board=el('section','scoreboard');const main=el('div','score-main');main.append(el('strong','score-value',String(points())),el('span','score-label',l('LEARNING POINTS','PUNTOS DE APRENDIZAJE')));board.append(main);for(const[value,label]of [[state.answers.length,l('Answers discovered','Respuestas descubiertas')],[people.filter(personDone).length+' / '+people.length,l('People completed','Personas completadas')],[state.visited.length+' / '+places.length,l('Places explored','Lugares explorados')]]){const stat=el('div','score-stat');stat.append(el('strong','',String(value)),el('span','',label));board.append(stat);}progress.append(board,el('p','small-note',l(state.completedTasks.length+' puzzle & drawing points collected. Progress stays on this device.',state.completedTasks.length+' puntos de rompecabezas y dibujos ganados. El progreso se guarda en este dispositivo.')));view.append(progress);
+    const progress=el('details','home-progress'),summary=el('summary','',l('My learning scoreboard','Mi marcador de aprendizaje'));progress.append(summary);const board=el('section','scoreboard');const main=el('div','score-main');main.append(el('strong','score-value',String(points())),el('span','score-label',l('LEARNING POINTS','PUNTOS DE APRENDIZAJE')));board.append(main);for(const[value,label]of [[state.answers.length,l('Answers discovered','Respuestas descubiertas')],[people.filter(personDone).length+' / '+people.length,l('People completed','Personas completadas')],[state.visited.length+' / '+places.length,l('Places explored','Lugares explorados')]]){const stat=el('div','score-stat');stat.append(el('strong','',String(value)),el('span','',label));board.append(stat);}progress.append(board,el('p','small-note',l(state.completedTasks.length+' puzzles & drawings completed. Progress stays on this device.',state.completedTasks.length+' rompecabezas y dibujos completados. El progreso se guarda en este dispositivo.')));progress.append(el('p','small-note score-spendable',l(baseballBalance()+' points available for baseball. '+state.baseball.spent+' used to play. Your total learning score stays above.',baseballBalance()+' puntos disponibles para béisbol. '+state.baseball.spent+' usados para jugar. Tu puntaje total de aprendizaje se mantiene arriba.')));view.append(progress);
   }
   function locationGallery(){
     const section=el('section','location-directory'),title=el('div','section-head');title.append(el('h2','',l('Pick your next adventure','Elige tu próxima aventura')));section.append(title);
@@ -4268,7 +4488,7 @@ window.MLL_ES_B = [
     const opts=el('div','quiz-options'),feedback=el('p','quiz-feedback');feedback.setAttribute('role','status');
     if(state.answers.includes(key))feedback.textContent=l('✓ Points already collected. You can practice again!','✓ Ya ganaste estos puntos. ¡Puedes practicar otra vez!');
     let solved=false;
-    data.options.forEach((text,i)=>{const b=button(text,'',()=>{if(solved)return;if(i===data.answer){solved=true;b.classList.add('correct');const fresh=answer(key);feedback.textContent=l('Yes! ','¡Sí! ')+data.explain+(fresh?l(' +10 learning points!',' ¡+10 puntos de aprendizaje!'):l(' You already earned these points.',' Ya ganaste estos puntos.'));[...opts.children].forEach(n=>n.disabled=true);if(!state.quiz.includes(p.id)){state.quiz.push(p.id);save();if(state.quiz.length===5)award('curious-five','Five curious answers');}}else{b.classList.add('retry');feedback.textContent=t('Try another idea. Look at the clues above.');}});opts.append(b);});q.append(opts,feedback);return q;
+    data.options.forEach((text,i)=>{const b=button(text,'',()=>{if(solved)return;if(i===data.answer){solved=true;b.classList.add('correct');const fresh=answer(key);feedback.textContent=l('Yes! ','¡Sí! ')+data.explain+(fresh?l(' +1 learning point!',' ¡+1 punto de aprendizaje!'):l(' You already earned these points.',' Ya ganaste estos puntos.'));[...opts.children].forEach(n=>n.disabled=true);if(!state.quiz.includes(p.id)){state.quiz.push(p.id);save();if(state.quiz.length===5)award('curious-five','Five curious answers');}}else{b.classList.add('retry');feedback.textContent=t('Try another idea. Look at the clues above.');}});opts.append(b);});q.append(opts,feedback);return q;
   }
   function stretch(p){const d=el('details','stretch');d.append(el('summary','',l('Think a little bigger: ','Piensa un poquito más: ')+p.stretch.question),el('p','',p.stretch.answer));return d;}
   function photoGallery(p){
@@ -4293,11 +4513,11 @@ window.MLL_ES_B = [
   function mapPage(query){topNav();view.append(heading(l('A WORLD OF DISCOVERIES','UN MUNDO POR DESCUBRIR'),l('Explore amazing locations','Explora lugares increíbles'),l('Tap a pin on the map, or choose a photo below.','Toca un punto en el mapa o elige una foto abajo.')));const host=el('div','world-map-host');view.append(host);const stops=family.flatMap(p=>(p.familyStops||[]).filter(s=>!places.some(q=>Math.abs(q.lat-s.lat)<.1&&Math.abs(q.lon-s.lon)<.1&&q.id!==p.id)).map(s=>({id:p.id,name:s.name+' · '+s.state,lat:s.lat,lon:s.lon,family:true,hook:s.connection})));if(window.MLL_MAP){dispose=MLL_MAP.mount(host,[...places.map(p=>({...p,name:p.id==='kirkland'?'Kirkland, Washington':p.name,family:false})),...stops.map(p=>({...p,family:false}))],{onSelect:id=>{location.hash='place/'+id+'?from=map';},visited:new Set(state.visited)});const f=query.get('focus');if(f&&dispose?.focus)dispose.focus(f);host.querySelector('.map-filters')?.remove();host.querySelector('.map-key-family')?.remove();}else host.append(el('p','error-note',l('Choose a place below.','Elige un lugar abajo.')));view.append(locationGallery());}
   function passport(){topNav();const h=heading('YOUR EXPLORER PASSPORT','Look where you’ve been.',l(state.stamps.length+' passport stamps · '+state.answers.length+' answers discovered',state.stamps.length+' sellos en tu pasaporte · '+state.answers.length+' respuestas descubiertas'));h.append(el('div','passport-stat',state.visited.length+' / '+places.length));view.append(h);const bar=el('div','passport-progress'),fill=el('span');fill.style.width=(100*state.visited.length/Math.max(1,places.length))+'%';bar.append(fill);bar.setAttribute('role','img');bar.setAttribute('aria-label',l(state.visited.length+' of '+places.length+' destinations discovered',state.visited.length+' de '+places.length+' destinos descubiertos'));view.append(bar);if(Object.keys(state.badges).length){const row=el('div','badges-row');Object.entries(state.badges).forEach(([key,value])=>row.append(el('span','earned-badge','✦ '+badgeLabel(key,value))));view.append(row);}if(!state.visited.length){const e=el('section','empty-state');e.append(el('h2','','Every adventure starts somewhere.'),el('p','','Open a place to start your passport. Come back here whenever you want to visit it again.'),button('Find my first surprise','button primary',surprise));view.append(e);return;}const grid=el('div','passport-grid');state.visited.slice().reverse().forEach(id=>grid.append(placeCard(byId.get(id),'passport')));view.append(grid);}
   function peopleMenu(){
-    topNav();view.append(heading(l('BIG IDEAS START SMALL','LAS GRANDES IDEAS EMPIEZAN PEQUEÑAS'),l('Meet remarkable people.','Conoce personas extraordinarias.'),l('Discover their stories. Answer two questions. Earn 20 points for each person.','Descubre sus historias. Responde dos preguntas. Gana 20 puntos por cada persona.')));
+    topNav();view.append(heading(l('BIG IDEAS START SMALL','LAS GRANDES IDEAS EMPIEZAN PEQUEÑAS'),l('Meet remarkable people.','Conoce personas extraordinarias.'),l('Discover their stories. Answer two questions. Earn 2 points for each person.','Descubre sus historias. Responde dos preguntas. Gana 2 puntos por cada persona.')));
     const tools=el('div','people-tools'),label=el('label','search-label',l('Find a person','Busca una persona')),search=el('input');search.type='search';search.id='people-search';search.placeholder=l('Try astronaut, baseball, Einstein…','Prueba astronauta, béisbol, Einstein…');label.htmlFor=search.id;tools.append(label,search);
     const filters=el('div','filter-row'),grid=el('div','person-grid'),count=el('p','people-count');count.setAttribute('role','status');let active='all';
     const fold=v=>v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    function show(){grid.replaceChildren();const list=people.filter(p=>(active==='all'||p.category===active)&&fold([p.name,p.role,p.hook,p.country,...p.facts].join(' ')).includes(fold(search.value.trim())));count.textContent=l(list.length+' people to discover',list.length+' personas por descubrir');for(const p of list){const a=link('','#person/'+p.id,'person-card');a.append(picture(p,'person-card-photo'));a.append(el('span','person-year',p.role),el('h2','',p.name),el('p','',p.hook));if(personDone(p))a.append(el('span','person-complete',l('✓ 20 points collected','✓ 20 puntos ganados')));grid.append(a);}if(!list.length)grid.append(el('p','empty-state',l('No one here yet. Try another word or choose All.','No hay resultados. Prueba otra palabra o elige Todos.')));}
+    function show(){grid.replaceChildren();const list=people.filter(p=>(active==='all'||p.category===active)&&fold([p.name,p.role,p.hook,p.country,...p.facts].join(' ')).includes(fold(search.value.trim())));count.textContent=l(list.length+' people to discover',list.length+' personas por descubrir');for(const p of list){const a=link('','#person/'+p.id,'person-card');a.append(picture(p,'person-card-photo'));a.append(el('span','person-year',p.role),el('h2','',p.name),el('p','',p.hook));if(personDone(p))a.append(el('span','person-complete',l('✓ Both questions completed','✓ Ambas preguntas completadas')));grid.append(a);}if(!list.length)grid.append(el('p','empty-state',l('No one here yet. Try another word or choose All.','No hay resultados. Prueba otra palabra o elige Todos.')));}
     for(const[id,en,es]of [['all','All','Todos'],['science','Science & inventions','Ciencia e inventos'],['explorers','Explorers','Exploradores'],['sports','Sports','Deportes'],['arts','Art & music','Arte y música'],['leaders','Leaders','Líderes']]){const b=button(l(en,es),'filter-chip'+(id==='all'?' active':''),()=>{active=id;for(const n of filters.children){n.classList.toggle('active',n===b);n.setAttribute('aria-pressed',String(n===b));}show();});b.setAttribute('aria-pressed',String(id==='all'));filters.append(b);}tools.append(filters,count);view.append(tools,grid);search.addEventListener('input',show);show();
   }
   function person(p){
@@ -4312,14 +4532,79 @@ window.MLL_ES_B = [
   function practice(kind){
     view.classList.add('practice-page');const host=el('div','practice-host');view.append(host);
     const questions=questionBank();
-    dispose=MLL_PRACTICE.mount(kind,host,{lang:I.lang,pick:l,answer,hasAnswer:id=>state.answers.includes(id),questions,read,get:(key,fallback)=>state.games[key]??fallback,set:(key,value)=>{state.games[key]=value;save();}});
+    dispose=MLL_PRACTICE.mount(kind,host,{lang:I.lang,pick:l,nextRandom,preserveSelection:preserveActivitySelection,answer,hasAnswer:id=>state.answers.includes(id),questions,read,get:(key,fallback)=>state.games[key]??fallback,set:(key,value)=>{state.games[key]=value;save();}});
   }
   function challenge(kind){
     view.classList.add('challenge-page','challenge-'+kind);const host=el('div','challenge-host');view.append(host);
-    const api={lang:I.lang,pick:l,art,complete:completeTask,completed:id=>state.completedTasks.includes(id),get:(key,fallback)=>state.games[key]??fallback,set:(key,value)=>{state.games[key]=value;save();},read};
+    const api={lang:I.lang,pick:l,nextRandom,preserveSelection:preserveActivitySelection,findItem,art,complete:completeTask,completed:id=>state.completedTasks.includes(id),get:(key,fallback)=>state.games[key]??fallback,set:(key,value)=>{state.games[key]=value;save();},read};
     const module=kind==='spy'?window.MLL_SPY:kind==='draw'?window.MLL_DRAW:window.MLL_WORDSEARCH;
     if(module){const mounted=module.mount(host,api);dispose=typeof mounted==='function'?mounted:Object.assign(()=>mounted?.dispose?.(),{saveState:()=>mounted?.saveState?.()});}else host.append(el('p','error-note',l('This activity could not load. Reload the page and try again.','No se pudo abrir la actividad. Recarga la página e inténtalo otra vez.')));
   }
+  // Baseball uses a separate spending ledger; learning achievements never decrease.
+  const BASEBALL_COST=10;
+  function baseballBalance(){return Math.max(0,points()-state.baseball.spent);}
+  function normalizeBaseball(value){
+    const out={spent:0,started:0,finished:0,active:null,lastResult:null};
+    if(!value||typeof value!=='object')return out;
+    for(const key of ['spent','started','finished'])if(Number.isSafeInteger(value[key])&&value[key]>=0)out[key]=Math.min(value[key],10000000);
+    if(value.active&&typeof value.active.id==='string'&&value.active.id.length<100){
+      const snapshot=value.active.snapshot&&typeof value.active.snapshot==='object'?value.active.snapshot:null;
+      out.active={id:value.active.id,snapshot,createdAt:Number(value.active.createdAt)||0};
+    }
+    if(value.lastResult&&typeof value.lastResult==='object'){
+      const v=value.lastResult;
+      if(Number.isInteger(v.runs)&&Number.isInteger(v.opponentRuns))out.lastResult={runs:Math.max(0,Math.min(99,v.runs)),opponentRuns:Math.max(0,Math.min(99,v.opponentRuns)),hits:Math.max(0,Number(v.hits)||0),homeRuns:Math.max(0,Number(v.homeRuns)||0),won:!!v.won,innings:3};
+    }
+    return out;
+  }
+  function baseballPage(play=false){
+    view.classList.add('ballpark-page');
+    const token=routeToken;
+    if(play&&state.baseball.active&&window.MLL_BASEBALL){
+      const id=state.baseball.active.id,host=el('div','ballpark-game-host');view.append(host);
+      const mounted=window.MLL_BASEBALL.mount(host,{
+        lang:I.lang,pick:l,name:state.name,session:state.baseball.active.snapshot,
+        onSave(snapshot){if(state.baseball.active?.id===id){state.baseball.active.snapshot=snapshot;save();}},
+        onFinish(summary){
+          if(state.baseball.active?.id!==id)return;
+          state.baseball.lastResult={runs:summary.runs,opponentRuns:summary.opponentRuns,hits:summary.hits,homeRuns:summary.homeRuns,innings:3,won:!!summary.won};
+          state.baseball.finished++;state.baseball.active=null;save();
+        },
+        onExit(){location.hash='home';}
+      });
+      const dialogs=['settings-dialog','grownup-dialog'].map($).filter(Boolean);
+      const observer=new MutationObserver(()=>{if(dialogs.some(d=>d.open))mounted?.pause?.();});
+      dialogs.forEach(d=>observer.observe(d,{attributes:true,attributeFilter:['open']}));
+      dispose=Object.assign(()=>{observer.disconnect();mounted?.dispose?.();},{saveState:()=>mounted?.saveState?.()});
+      return;
+    }
+    topNav();
+    const lobby=el('section','ballpark-lobby');
+    const preview=el('div','ballpark-preview');preview.setAttribute('aria-hidden','true');preview.innerHTML=window.MLL_BASEBALL_THUMB||'';
+    const copy=el('div','ballpark-entry');copy.append(el('p','eyebrow',l('THE LEARNING LEAGUE','LA LIGA DEL APRENDIZAJE')),el('h1','',l(state.name+'’s Ballpark','El estadio de '+state.name)),el('p','ballpark-lead',l('You did the learning. Now step up to the plate.','Aprendiste algo nuevo. Ahora, ¡a batear!')));
+    const rules=el('ul','ballpark-rules');for(const text of [l('Time your swing as the ball reaches home plate.','Batea cuando la pelota llegue al plato.'),l('Play 3 innings. Three outs end your turn.','Juega 3 entradas. Tres outs terminan tu turno.'),l('Five runs end a turn, too. The other team bats automatically.','Cinco carreras también terminan el turno. El otro equipo batea automáticamente.')])rules.append(el('li','',text));copy.append(rules);
+    const balance=el('div','ballpark-balance');balance.append(el('strong','',String(baseballBalance())),el('span','',l('points available to play','puntos disponibles para jugar')));copy.append(balance);
+    if(!window.MLL_BASEBALL){copy.append(el('p','',l('The game is still loading. Refresh the page to try again.','El juego todavía está cargando. Actualiza la página para intentarlo otra vez.')));}
+    else if(state.baseball.active){
+      copy.append(button(l('Resume game · already paid','Continuar partida · ya pagada'),'button primary baseball-resume',()=>{if(token===routeToken)location.hash='baseball/play';}),el('p','small-note',l('Your game is saved. No more points needed.','Tu partida está guardada. No necesitas más puntos.')));
+    }else if(baseballBalance()>=BASEBALL_COST){
+      const start=button(l('Play 3 innings · 10 points','Jugar 3 entradas · 10 puntos'),'button primary baseball-start',()=>{
+        if(token!==routeToken||start.disabled)return;start.disabled=true;
+        if(state.baseball.active){location.hash='baseball/play';return;}
+        if(baseballBalance()<BASEBALL_COST){route();return;}
+        state.baseball.spent+=BASEBALL_COST;state.baseball.started++;
+        state.baseball.active={id:'ballgame-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9),createdAt:Date.now(),snapshot:null};
+        save();location.hash='baseball/play';
+      });copy.append(start,el('p','small-note',l('10 points per game. Your lifetime learning score stays yours.','10 puntos por partida. Tu puntaje total de aprendizaje no baja.')));
+    }else{
+      const needed=BASEBALL_COST-baseballBalance();
+      copy.append(el('p','ballpark-needed',l('Earn '+needed+' more '+(needed===1?'point':'points')+' to play.','Gana '+needed+' '+(needed===1?'punto más':'puntos más')+' para jugar.')));
+      const earn=el('div','ballpark-earn');earn.append(link(l('Earn points in Math →','Gana puntos en Matemáticas →'),'#math','button primary'),link(l('Try a quiz','Responde preguntas'),'#quiz','button ghost'));copy.append(earn,el('p','small-note',l('Each new correct answer, found word, or hidden object earns 1 point. You can also collect points by completing puzzles.','Cada respuesta nueva y correcta, palabra encontrada u objeto oculto vale 1 punto. También ganas puntos al completar rompecabezas.')));
+    }
+    if(state.baseball.lastResult){const last=state.baseball.lastResult;copy.append(el('p','ballpark-last',l('Last game: You '+last.runs+' · Comets '+last.opponentRuns,'Última partida: Tú '+last.runs+' · Cometas '+last.opponentRuns)));}
+    lobby.append(preview,copy);view.append(lobby);
+  }
+
   function creditsPage(){
     topNav();view.append(heading('','Photo credits & research',l('Photographs are bundled with the website. Original creators keep their listed licenses.','Las fotos están incluidas en el sitio. Cada imagen conserva la licencia de su creador.')));
     view.append(el('p','small-note',l('Photos were resized and compressed; card layouts may crop them. Family connections were supplied by Max’s parent. Coordinates show public places, never home addresses.','Las fotos se redujeron y comprimieron; algunas tarjetas recortan su vista. El papá de Max compartió los vínculos familiares. Las coordenadas muestran lugares públicos, nunca direcciones de casas.')));
@@ -4332,8 +4617,8 @@ window.MLL_ES_B = [
   function route(){routeToken++;stopReading();dismissCelebration();if(dispose){dispose();dispose=null;}view.className='';view.replaceChildren();const raw=location.hash.slice(1)||'home',parts=raw.split('?'),path=parts[0].split('/'),query=new URLSearchParams(parts[1]||'');const page=path[0];document.querySelectorAll('[data-nav]').forEach(a=>{const active=a.dataset.nav===(page==='place'?(query.get('from')==='map'?'map':'home'):page==='map'?'map':page==='passport'?'passport':'home');if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});document.title=l(state.name+"'s Learning Lab", "El laboratorio de "+state.name);
     if(page==='place'&&byId.has(path[1]))profile(byId.get(path[1]),query.get('from'));
     else if(page==='person'&&people.some(p=>p.id===path[1]))person(people.find(p=>p.id===path[1]));
-    else if(page==='credits')creditsPage();else if(page==='places')placeMenu();else if(page==='map')mapPage(query);else if(page==='passport')passport();else if(page==='people')peopleMenu();else if(['spy','draw','wordsearch'].includes(page))challenge(page);else if(['math','quiz','spelling','hangman'].includes(page))practice(page);else home();
-    window.scrollTo(0,0);view.focus({preventScroll:true});
+    else if(page==='baseball')baseballPage(path[1]==='play');else if(page==='credits')creditsPage();else if(page==='places')placeMenu();else if(page==='map')mapPage(query);else if(page==='passport')passport();else if(page==='people')peopleMenu();else if(['spy','draw','wordsearch'].includes(page))challenge(page);else if(['math','quiz','spelling','hangman'].includes(page))practice(page);else home();
+    preserveActivitySelection=false;window.scrollTo(0,0);view.focus({preventScroll:true});
   }
   function renderVoiceSettings(){
     const host=$('voice-settings');if(!host)return;refreshVoices();host.replaceChildren();
@@ -4355,13 +4640,13 @@ window.MLL_ES_B = [
   window.addEventListener('hashchange',route);window.addEventListener('pageshow',event=>{if(event.persisted)route();});window.addEventListener('pagehide',()=>{stopReading();if(dispose)dispose();});document.addEventListener('visibilitychange',()=>{if(document.hidden)stopReading();});
   function changeLanguage(lang){
     if(lang===I.lang)return;stopReading();if(dispose?.saveState)dispose.saveState();
-    clearTimeout(toastTimer);$('toast').classList.remove('show');I.set(lang);loadContent();I.staticDOM();updateHeader();route();
+    clearTimeout(toastTimer);$('toast').classList.remove('show');I.set(lang);loadContent();I.staticDOM();updateHeader();preserveActivitySelection=true;route();
     const toggle=document.querySelector('[data-language="'+I.lang+'"]');if(toggle)toggle.focus({preventScroll:true});
   }
   document.querySelectorAll('[data-language]').forEach(b=>b.addEventListener('click',()=>changeLanguage(b.dataset.language)));
   I.staticDOM();updateHeader();route();
   // A small read-only handle makes content checks possible without altering progress.
-  window.MLL_APP={get language(){return I.lang;},get places(){return places.map(p=>({id:p.id,name:p.name,family:!!p.family}));},get people(){return people;},get galleryCount(){return Object.values(galleries).reduce((n,a)=>n+a.length,0);},get points(){return points();},get answerCount(){return state.answers.length;},get taskCount(){return state.completedTasks.length;},get completedTasks(){return state.completedTasks.slice();},get artCount(){return art.length;},get surpriseCount(){return surprises.length;},get questionCount(){return questionBank().length;},get allQuestions(){return questionBank();}};
+  window.MLL_APP={get language(){return I.lang;},get places(){return places.map(p=>({id:p.id,name:p.name,family:!!p.family}));},get people(){return people;},get galleryCount(){return Object.values(galleries).reduce((n,a)=>n+a.length,0);},get points(){return points();},get baseballBalance(){return baseballBalance();},get baseballState(){return JSON.parse(JSON.stringify(state.baseball));},get homePlaceId(){return state.games.homePlaceLast;},get answerCount(){return state.answers.length;},get taskCount(){return state.completedTasks.length;},get completedTasks(){return state.completedTasks.slice();},get artCount(){return art.length;},get surpriseCount(){return surprises.length;},get questionCount(){return questionBank().length;},get allQuestions(){return questionBank();}};
 })();
 
 ;
