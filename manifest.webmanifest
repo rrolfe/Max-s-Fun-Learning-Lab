@@ -1,0 +1,1 @@
+{"name": "Max's Learning Lab", "short_name": "Max's Lab", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#061b36", "theme_color": "#061b36", "icons": [{"src": "assets/ui/max-emblem.png", "sizes": "1280x1280", "type": "image/png", "purpose": "any"}]}

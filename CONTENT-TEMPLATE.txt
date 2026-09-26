@@ -1,0 +1,66 @@
+LEARNING EDITION: New people/family/gallery records live in data/people-expanded.js in both languages. Use its existing records as the most complete examples. Two quiz questions are required for every person.
+
+BILINGUAL EDITION: Add the English record below to data/. Also add a matching Spanish record with the same ID in the labeled MLL_ES section of app.js, keeping coordinates, answer indexes and URLs identical. For help, provide the latest ZIP when asking for a new lesson.
+
+ADDING A DESTINATION
+
+Paste a new object into the array in data/places-a.js or data/places-b.js.
+Put a comma between objects. Replace every example value. Never reuse an ID.
+
+{
+  id: 'your-unique-place-id',
+  name: 'A short place name',
+  country: 'Country or region',
+  category: 'Nature',
+  lat: 0,
+  lon: 0,
+  hook: 'One surprising reason to tap this place.',
+  facts: [
+    'One short, verified fact a seven-year-old can understand.',
+    'A second concrete fact, ideally something you can picture.',
+    'A third fact that invites a question.'
+  ],
+  stretch: {
+    question: 'One deeper question to wonder about?',
+    answer: 'A short explanation to discuss with a grown-up.'
+  },
+  quiz: {
+    question: 'A question answered by the facts above?',
+    options: ['First choice', 'Second choice', 'Third choice'],
+    answer: 0,
+    explain: 'Why the correct choice makes sense.'
+  },
+  photoAlt: 'An accurate description of the actual photo',
+  sources: [{title: 'Primary source title', url: 'https://official-source.example/'}]
+}
+
+Add the image file to assets/places/your-unique-place-id.jpg.
+Add a matching property inside the object in data/photos.js:
+
+'your-unique-place-id': {
+  src: 'assets/places/your-unique-place-id.jpg',
+  alt: 'What this photograph actually shows',
+  credit: 'Photographer name',
+  source: 'https://original-photo-description-page.example/',
+  license: 'The actual image license',
+  licenseUrl: 'https://actual-license-page.example/',
+  width: 1000,
+  height: 667
+}
+
+The width/height should match the image. Use photos you have permission to reuse.
+The in-app credits page updates from the photo records. Include altEs for new gallery photos.
+
+ADDING A PERSON
+
+Use the same id, name, hook, facts, stretch, quiz, and sources structure in data/people.js.
+Omit lat/lon. Add:
+  category: 'science', // science, explorers, leaders, sports or arts
+  quiz2: {question: 'A second question?', options: ['A', 'B', 'C'], answer: 1, explain: 'Why B is correct.'},
+  role: 'Short role such as Inventor',
+  country: 'Relevant country',
+  activity: {title: 'Try it yourself', prompt: 'A safe, short activity.'}
+
+Add a licensed portrait through data/photos.js. Every person needs a licensed portrait with an accurate description.
+
+DISCOVERY EDITION: New bilingual content is bundled in data/discoveries.js. Keep English/Spanish IDs identical. A place may have quiz and quiz2. Both feed the global Quiz bank. Add actual photo metadata and a local image. Homepage collection sizes are deliberately hidden. Add new question records using existing IDs only when the meaning stays the same; use new IDs for entirely new questions to preserve earned scores.
