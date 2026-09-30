@@ -1,76 +1,70 @@
-MAX'S LEARNING LAB — DISCOVERY EXPANSION
-September 29, 2026
+MAX'S LEARNING LAB — PHOTO DISCOVERIES UPDATE (VERSION 7)
 
-THIS IS AN UPDATE for your existing Max-s-Fun-Learning-Lab repository.
-It is not a complete replacement website for an empty repository.
+This is an UPDATE for your existing Max-s-Fun-Learning-Lab repository.
+It is not a standalone new website. Keep your existing data, photo, styles,
+UI and other folders. Your current website URL stays the same.
 
-WHAT TO UPLOAD
-1. Unzip this download.
-2. Open your existing repository:
-   https://github.com/rrolfe/Max-s-Fun-Learning-Lab
-3. At the top level (where your current index.html lives), choose
-   Add file > Upload files.
-4. Upload these THREE files, replacing their existing versions:
-      index.html
-      app.js
-      discovery.css
-5. Also upload the whole wonders folder, keeping its name and contents.
-   It belongs next to index.html, NOT inside data, assets, or another folder.
-   All 20 photographs should appear as wonders/filename.jpg.
-6. Commit the changes. Leave your other files and folders in place.
-7. After the GitHub Pages deployment succeeds, reopen:
-   https://rrolfe.github.io/Max-s-Fun-Learning-Lab/#home
+UPLOAD
+1. Unzip Max-Lab-Photo-Discoveries-Update.zip.
+2. Open your existing repository's main Code page on GitHub in a browser.
+3. Choose Add file > Upload files.
+4. Drag these THREE FILES and TWO FOLDERS onto the upload area:
+     index.html
+     app.js
+     discovery.css
+     newphotos/    (43 new photographs)
+     wonders/      (20 photographs retained from the previous update)
+   Keep the folders intact. Do not drag their pictures out into the root.
+   Put these items at the same level as your existing index.html, not inside
+   another folder. Upload the extracted contents, not the ZIP itself.
+5. Commit the changes. Matching files will be replaced; other files stay.
+6. After GitHub Pages finishes deploying, reopen or refresh your site.
+   Versioned script/style links help load the new edition.
 
-There are only 23 website files in this update: three replacements and
-20 new photos. You do not need to upload this instruction file.
-The index file requests a new script/style version to avoid old cached code.
-Existing progress remains on the same device, browser, and website address.
-Progress does not automatically sync between different devices or browsers.
+There are 66 website files in this update, plus this guide. If uploading all
+at once is troublesome, upload newphotos first, wonders second, and the
+three root files last. Each batch stays below 100 files.
 
-NEW LEARNING AREAS
-- Ocean Explorers: six discoveries plus a depth slider.
-- How Things Work: six discoveries plus a working screen circuit.
-- Animal Superpowers: six discoveries, real animal photos, and camouflage.
-- Sports Science: six discoveries and an adjustable ball-flight model.
-- Money & Mini Business / Lemonade Stand: 24 market days, supply planning,
-  price choices, sales/cost/profit breakdowns, and money questions.
-- Build It Lab: 24 distinct block blueprints with touch-to-place blocks,
-  checking, saved work, and spatial reasoning.
+WHAT CHANGED
+- Homepage subjects open their own page, with a prominent See all button
+  and the full remaining collection below. Places keep a World map link.
+- Clean photos with titles below, instead of heavy gradients over pictures.
+- Reviewed portrait framing for all 30 people; full heads on home/profile.
+- Five refreshed destination photos: Las Terrenas, Galapagos, Lima,
+  Sao Paulo and Bogota.
+- 20 animal superpowers with photographs and short specialty badges.
+- 6 Ocean Explorers, 6 How Things Work, and 6 Sports Stories lessons.
+- 11 optional videos: 10 YouTube selections plus an official cereal clip.
+- Animal camouflage is an optional bonus at the bottom, with 13 backgrounds.
+- Put It in Order: 30 bilingual sequencing challenges, 1 credit per new solve.
+- Harbor Rescue: a new touch-friendly turtle rescue puzzle.
+- All four playful games require earned credits:
+    Baseball: 10 credits / three innings
+    Lemonade Stand: 5 credits / three market days
+    Build It Lab: 5 credits / three challenges
+    Harbor Rescue: 5 credits / one rescue mission
+  Paid sessions resume without charging again. Reward games do not generate
+  learning credits. Lifetime learning score remains separate from balance.
 
-Science sections appear below the two main homepage cards.
-Lemonade Stand and Build It Lab appear in Play & Learn.
-Everything is available in English and Spanish.
-Each new correct question or matched blueprint earns one learning point,
-and repeating the same achievement cannot earn that point again.
-Pretend lemonade money is completely separate from learning points.
-New science questions also join the existing mixed Quiz activity.
+LANGUAGES & VIDEOS
+Written lessons, questions, navigation and new games support English/Spanish.
+Selected videos are in English and are clearly labeled. Videos require an
+internet connection and load only when Play is tapped. External providers
+may show ads, restrict playback, or change availability. Each video has an
+Open separately link if its embedded player is unavailable. No video is
+required to answer the written lesson's quiz.
 
-LOCATION CHANGES
-- Family notes now focus on connections to places, without explaining
-  marriages or obvious relationships.
-- Faroe Islands, Victoria Falls, Iceland's northern lights, and Maasai Mara:
-  each has a map location, three real photos, short facts, a stretch prompt,
-  and two questions.
-- The four new places appear near the top of the photo directory, after
-  familiar locations, and join the fair shuffled homepage photo selection.
-- Photo credits, license links, and research links are included in the site.
+PROGRESS
+Continue using the same repository URL and browser to retain local progress.
+Before replacing files, you can save a backup through Grown-up corner.
+Progress is saved on each device/browser, not shared between family devices.
 
-PREVIOUS FIXES INCLUDED
-- Clicking the homepage place/person photo opens that pictured subject.
-- Baseball has Easy, Medium, and Hard settings; three outs end each inning.
-- A new baseball game costs 10 points once; resuming does not charge again.
-- The header shows points available after baseball spending.
-- Existing puzzles, translations, photo folders, and scores remain compatible.
+VERIFICATION
+Browser checks: 38 lessons in both languages; 43 new local images decoded;
+360px, 768px and 1024px layouts; collection links; video Play control;
+all four credit gates, repeat charges, reload/language resume, reward-game
+completion, and learning-point deduplication. No console errors or missing
+local assets in the tested paths. This was browser emulation, not physical
+hardware testing. Video IDs/titles were verified; regional playback varies.
 
-ABOUT THE MODELS
-The ball-flight activity assumes level ground, equal starting speed, and no
-wind or air resistance. It teaches comparisons, not exact real sports shots.
-The building activity is a spatial blueprint puzzle, not a physics or
-structural-strength simulation. Lemonade is a simplified pretend business.
-
-VALIDATION
-Checked in a local browser with touch emulation at phone and tablet widths
-(360, 390, 768, and 1024 pixels), in both languages. Checked photo loading,
-quiz scoring and persistence, no duplicate rewards, unique blueprints,
-baseball charging, and the existing homepage links.
-This is browser testing, not testing on physical iPads or Android phones.
+Image licenses and research links are included in Photo credits & research.
