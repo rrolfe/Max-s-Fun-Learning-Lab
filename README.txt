@@ -1,44 +1,53 @@
-MAX LEARNING LAB — SPANISH VOICE + ROLLER-COASTER UPDATE
+LEMONADE LANE — MAX'S LEARNING LAB UPDATE
 
-For the Photo Discoveries (version 7) site delivered in the previous ZIP.
-Upload app.js and index.html to the ROOT of your existing repository,
-replacing those two files. No photo folders need to be uploaded again.
-Keep all existing files/folders, including discovery.css and newphotos.
+Upload these extracted items to the ROOT of your EXISTING repository:
+  app.js
+  index.html
+  discovery.css
+  lemonade/        (keep this folder intact; it contains stand.png)
+Replace matching files. Keep all your other folders/files. Do not upload
+the ZIP itself. This update requires the previous Photo Discoveries site
+and includes the subsequent Spanish voice/roller-coaster changes.
 
-SPANISH AUDIO
-1. Open the site after GitHub finishes publishing; refresh the page.
-2. Select Español, then Grown-up corner / Rincón de adultos.
-3. Under reading voice, choose Automatic / Automática if you previously
-   saved a manual voice. Automatic now ranks quality ahead of dialect.
-4. Tap Try this voice. You can still audition and save another choice.
+WHAT MAX CAN DO
+- Run a photoreal neighborhood lemonade stand with big touch controls.
+- Choose batch size and price using the day's weather as a clue.
+- Serve up to four customer groups at his own pace. No countdown.
+- Earn permanent decorations at $8 and $18 in total net profit.
+- Unlock homemade ice cream at $30 total net profit. Then choose how many
+  ice creams to prepare alongside lemonade. Ice cream sells for $4 and
+  costs $2 to make; no additional product categories.
+- Keep business money, upgrades and progress between sessions.
+- Play three market days for 5 earned learning credits. Resume free.
+  Business dollars never turn into learning credits.
 
-Priority: Google Español/Spanish, Premium, Natural/Neural, Enhanced,
-then familiar Spanish native voices, then other Spanish voices.
-Region is only a tie-breaker. Normal pitch and Spanish rate 1.0 avoid
-artificial pitch-shifting or excessive slowing. English stays at its
-existing rate and selection policy.
+MATH CLARIFIED
+Old game's calculation was correct, but its question asked for money LEFT,
+which includes starting cash. The new question explicitly asks for PROFIT.
+Example: start $20, ingredients $6, sales $12:
+  Profit = $12 - $6 = $6
+  Money left = $20 + $6 = $26
+Leftover stock still cost money to prepare and is not carried to tomorrow.
+Losses reduce total net profit and cash; unlocked improvements remain.
+If cash drops below the cheapest batch, a clearly labeled $8 restock gift
+prevents a dead end. This gift is not counted as profit.
+The end-of-day question is practice inside a reward game, so it does not
+award learning credits.
 
-The Web Speech API only exposes voices supplied by your device/browser.
-It offers no universal quality or gender field. Names provide hints,
-not a guarantee of naturalness or a female voice. A downloaded enhanced
-voice helps only if the browser exposes it. If voices haven't loaded,
-the app asks you to tap Listen again instead of speaking with an
-uncontrolled system default. voiceschanged refreshes the available list.
+TESTED
+Six market days, ice-cream unlock and sales, costs vs revenue vs net profit,
+three-day session limits, no reward-credit farming, reload/language resume,
+mid-order resume, and a zero-sales $12-loss case. No detected console errors.
+Phone/iPad viewport emulation: 390, 768, 1024 pixels. Real device play may vary.
 
-VIDEO
-Replaced the earlier SciShow Kids roller-coaster video with Jared Owen's
-How Roller Coasters Actually Work, using 3D mechanical explanations.
-https://www.youtube.com/watch?v=irkAtqm-eCs
-This is a more detailed engineering video, so younger viewers may want
-an adult to pause and explain. It is optional; the written lesson and
-quiz still stand on their own. Provider availability may vary.
+The stand is new AI-generated photoreal artwork, created using the built-in
+image generator. Prompt: a realistic handmade wooden lemonade stand in a
+sunny Southern California front garden; yellow-white awning, pitcher,
+lemons, cups, blank chalkboard, room for an ice-cream upgrade; no people,
+logos, interface or text; wide 3:2 photographic composition.
 
-DEVELOPER REFERENCE
-speech-functions.js contains the updated selection and speech-function
-block with comments. It uses existing Max Learning Lab helper variables.
-It is already included in app.js; do not add a second script tag for it.
-
-Checked JavaScript syntax and voice-selection ranking with mock lists.
-Actual voice sound must be auditioned on your iPad/phone; headless testing
-cannot reproduce its installed voices. Video ID/title/channel confirmed
-through YouTube oEmbed; no claim of full playback review on every device.
+Game design reviewed with a gaming-design agent; reference guidance:
+https://developingchild.harvard.edu/wp-content/uploads/2024/10/Executive-Function-Activities-for-5-to-7-year-olds.pdf
+https://legoeducation.atlassian.net/wiki/spaces/Guidelines/pages/36824612990/Learning+through+Play+LtP
+These inform manageable planning, active play and experimentation; they
+are not evidence that every seven-year-old prefers this particular design.
