@@ -4153,12 +4153,17 @@ window.MLL_HOME_THUMBS=Object.freeze({...window.MLL_HOME_THUMBS,baseball:window.
 const clone=o=>JSON.parse(JSON.stringify(o));
 const text=(en,es,lang)=>lang==='es'?es:en;
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
-function create(options={}){return {version:1,inning:1,outs:0,strikes:0,bases:[false,false,false],runs:0,opponentRuns:0,hits:0,homeRuns:0,pitches:0,plays:0,playerByInning:[0,null,null],opponentByInning:[null,null,null],seed:(options.seed>>>0)||Math.floor(Math.random()*2147483647)+1,status:'playing',sound:false,difficulty:options.difficulty==='allstar'?'allstar':'rookie'};}
+function difficultyLevel(value){return ['easy','medium','hard'].includes(value)?value:value==='allstar'?'hard':'medium';}
+function create(options={}){return {version:1,inning:1,outs:0,strikes:0,bases:[false,false,false],runs:0,opponentRuns:0,hits:0,homeRuns:0,pitches:0,plays:0,playerByInning:[0,null,null],opponentByInning:[null,null,null],seed:(options.seed>>>0)||Math.floor(Math.random()*2147483647)+1,status:'playing',sound:false,difficulty:difficultyLevel(options.difficulty)};}
 function random(s){s.seed=(Math.imul(s.seed,1664525)+1013904223)>>>0;return s.seed/4294967296;}
-function normalize(input){const d=create();if(!input||input.version!==1)return d;const s={...d,...clone(input)};s.inning=clamp(Math.floor(+s.inning||1),1,3);s.outs=clamp(Math.floor(+s.outs||0),0,3);s.strikes=clamp(Math.floor(+s.strikes||0),0,2);s.bases=[0,1,2].map(i=>!!(input.bases||[])[i]);for(const k of ['runs','opponentRuns','hits','homeRuns','pitches','plays'])s[k]=Math.max(0,Math.floor(+s[k]||0));s.playerByInning=[0,1,2].map(i=>(input.playerByInning||[])[i]===null?null:Math.max(0,Math.floor(+(input.playerByInning||[])[i]||0)));s.opponentByInning=[0,1,2].map(i=>(input.opponentByInning||[])[i]===null?null:Math.max(0,Math.floor(+(input.opponentByInning||[])[i]||0)));s.status=input.status==='finished'?'finished':'playing';s.difficulty=input.difficulty==='allstar'?'allstar':'rookie';return s;}
-function timingOutcome(offset,difficulty='rookie'){
- const a=Math.abs(offset),w=difficulty==='allstar'?.86:1;
- if(a<=.042*w)return 'homer';if(a<=.095*w)return 'double';if(a<=.145*w)return 'single';if(a<=.185*w)return offset<0?'triple':'single';if(a<=.225*w)return offset<0?'flyout':'groundout';if(a<=.29*w)return 'foul';return 'strike';
+function normalize(input){const d=create();if(!input||input.version!==1)return d;const s={...d,...clone(input)};s.inning=clamp(Math.floor(+s.inning||1),1,3);s.outs=clamp(Math.floor(+s.outs||0),0,3);s.strikes=clamp(Math.floor(+s.strikes||0),0,2);s.bases=[0,1,2].map(i=>!!(input.bases||[])[i]);for(const k of ['runs','opponentRuns','hits','homeRuns','pitches','plays'])s[k]=Math.max(0,Math.floor(+s[k]||0));s.playerByInning=[0,1,2].map(i=>(input.playerByInning||[])[i]===null?null:Math.max(0,Math.floor(+(input.playerByInning||[])[i]||0)));s.opponentByInning=[0,1,2].map(i=>(input.opponentByInning||[])[i]===null?null:Math.max(0,Math.floor(+(input.opponentByInning||[])[i]||0)));s.status=input.status==='finished'?'finished':'playing';s.difficulty=difficultyLevel(input.difficulty);return s;}
+function timingOutcome(offset,difficulty='medium'){
+ const a=Math.abs(offset),level=difficultyLevel(difficulty),w=level==='easy'?1.65:level==='hard'?.65:1;
+ if(a<=.016*w)return 'homer';if(a<=.036*w)return 'triple';if(a<=.065*w)return 'double';if(a<=.11*w)return 'single';if(a<=.20*w)return offset<0?'flyout':'groundout';if(a<=.27*w)return 'foul';return 'strike';
+}
+function nextPitch(s){
+ const level=difficultyLevel(s.difficulty),ranges={easy:[1500,2100],medium:[1150,1750],hard:[850,1350]},range=ranges[level];
+ return {duration:Math.round(range[0]+random(s)*(range[1]-range[0])),windup:Math.round(480+random(s)*320),curve:(random(s)*2-1)*(level==='easy'?15:level==='hard'?38:27)};
 }
 function advance(s,bases){let scored=0;const next=[false,false,false];for(let i=2;i>=0;i--){if(!s.bases[i])continue;const dest=i+bases;if(dest>=3)scored++;else next[dest]=true;}if(bases>=4)scored++;else next[bases-1]=true;s.bases=next;return scored;}
 function applyPlay(input,outcome){
@@ -4169,10 +4174,10 @@ function applyPlay(input,outcome){
  else if(outcome==='strike'){s.strikes++;if(s.strikes>=3){s.strikes=0;s.outs++;event.outcome='strikeout';}}
  else if(outcome==='flyout'||outcome==='groundout'){s.outs++;s.strikes=0;}
  else throw new Error('Unknown baseball outcome: '+outcome);
- // A full play counts (including all runners on a homer), then the half-inning ends at 5+ runs.
+ // Count every run, then change sides only after the third out.
  s.runs+=runs;s.playerByInning[s.inning-1]=(s.playerByInning[s.inning-1]||0)+runs;event.runs=runs;
- if(s.outs>=3||s.playerByInning[s.inning-1]>=5){
-  event.endedInning=true;event.runLimit=s.playerByInning[s.inning-1]>=5;
+ if(s.outs>=3){
+  event.endedInning=true;
   const r=random(s);const added=r<.27?0:r<.60?1:r<.86?2:r<.97?3:4;s.opponentRuns+=added;s.opponentByInning[s.inning-1]=added;event.opponentAdded=added;s.bases=[false,false,false];s.strikes=0;
   if(s.inning===3){s.status='finished';}else{s.inning++;s.outs=0;s.playerByInning[s.inning-1]=0;}
  }
@@ -4181,9 +4186,9 @@ function applyPlay(input,outcome){
 function summary(s){return {runs:s.runs,opponentRuns:s.opponentRuns,hits:s.hits,homeRuns:s.homeRuns,innings:3,won:s.runs>s.opponentRuns,tied:s.runs===s.opponentRuns,pitches:s.pitches};}
 const labels={strike:['Strike!','¡Strike!'],strikeout:['Strike three. One out.','Tres strikes. Un out.'],foul:['Foul ball!','¡Bola fuera!'],single:['Base hit!','¡Sencillo!'],double:['A double!','¡Doble!'],triple:['A triple!','¡Triple!'],homer:['HOME RUN!','¡JONRÓN!'],flyout:['Caught in the air!','¡Atrapada en el aire!'],groundout:['Out at first!','¡Out en primera!']};
 function mount(host,api={}){
- const lang=api.lang||'en',L=(en,es)=>text(en,es,lang),name=String(api.name||'Max');let state=normalize(api.session),phase='ready',elapsed=0,pitchDuration=0,disposed=false,paused=false,last=0,frame=0,swingAt=-1,result=null,flight=null,finishedNotified=false,audioContext=null;
+ const lang=api.lang||'en',L=(en,es)=>text(en,es,lang),name=String(api.name||'Max');let state=normalize(api.session),phase='ready',elapsed=0,pitchDuration=0,pitchWindup=600,pitchCurve=0,disposed=false,paused=false,last=0,frame=0,swingAt=-1,result=null,flight=null,finishedNotified=false,audioContext=null;
  const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- host.innerHTML=`<section class="mll-ballpark" aria-label="${L('Baseball game','Juego de béisbol')}"><div class="bb-heading"><div><p class="bb-kicker">${L('LEARN. EARN. PLAY BALL.','APRENDE. GANA. JUEGA.')}</p><h1>${L('The Learning League','La Liga del Aprendizaje')}</h1></div><button class="bb-secondary bb-exit" type="button">${L('Save & leave','Guardar y salir')}</button></div><div class="bb-scoreboard"><div class="bb-score-team"><span class="bb-team-name"></span><strong data-score="home">0</strong></div><div class="bb-inning"><span>${L('INNING','ENTRADA')}</span><strong data-inning>1 / 3</strong><span class="bb-lights" aria-label="${L('Outs','Outs')}"></span></div><div class="bb-score-team bb-away"><span>${L('COMETS','COMETAS')}</span><strong data-score="away">0</strong></div></div><div class="bb-stadium-wrap"><canvas class="bb-stadium" width="1000" height="650" role="img" aria-label="${L('Baseball field. Watch the pitch approach the glowing home plate.','Campo de béisbol. Mira la pelota acercarse al plato brillante.')}"></canvas><div class="bb-stadium-tools"><button class="bb-mini bb-pause" type="button">${L('Pause','Pausa')}</button><button class="bb-mini bb-sound" type="button" aria-pressed="false">${L('Sound off','Sin sonido')}</button><span class="bb-speed-label"></span></div><div class="bb-result-banner" aria-hidden="true" hidden></div><div class="bb-overlay" hidden><div class="bb-overlay-card"></div></div><div class="bb-field-caption">${L('3 innings · 3 outs per inning','3 entradas · 3 outs por entrada')}</div></div><div class="bb-controls"><div class="bb-live"><strong class="bb-call" role="status" aria-live="polite"></strong><span class="bb-tip"></span><div class="bb-count"><span class="bb-strikes"></span><span class="bb-bases"></span></div></div><button class="bb-swing" type="button"></button></div><div class="bb-lower"><div class="bb-speed"><span>${L('Pitch speed','Velocidad')}</span><button type="button" data-speed="rookie">${L('Rookie','Principiante')}</button><button type="button" data-speed="allstar">${L('All-star','Estrella')}</button></div><button class="bb-rules-button" type="button" aria-expanded="false">${L('How to play','Cómo jugar')}</button></div><div class="bb-rules" hidden><p>${L('Tap “Pitch to me” to get ready. Watch the ball come toward you, then tap SWING when it reaches the bright ring at home plate. The ring turns gold at the best moment. Tap the field or press Space to swing, too.','Toca “Lánzame” para empezar. Mira cómo se acerca la pelota y toca BATEAR cuando llegue al aro brillante del plato. El aro se vuelve dorado en el mejor momento. También puedes tocar el campo o usar la barra espaciadora.')}</p><p>${L('Three strikes make one out. A foul adds a strike, but never the third. Hits move runners around the bases. After three outs, or a play that takes your inning to 5 runs, the Comets take their automatic turn. Play 3 innings; a tie stays a tie.','Tres strikes son un out. Una bola fuera cuenta como strike, pero nunca como el tercero. Los hits mueven a los corredores. Después de tres outs, o de una jugada que llegue a 5 carreras en la entrada, los Cometas juegan su turno automático. Juega 3 entradas; un empate queda como empate.')}</p><p>${L('Your progress saves after every pitch. Leaving and resuming this game costs no extra points. Baseball does not earn learning points.','Tu progreso se guarda después de cada lanzamiento. Salir y continuar este partido no cuesta más puntos. El béisbol no da puntos de aprendizaje.')}</p></div><div class="bb-boxscore" aria-label="${L('Runs by inning','Carreras por entrada')}"></div></section>`;
+ host.innerHTML=`<section class="mll-ballpark" aria-label="${L('Baseball game','Juego de béisbol')}"><div class="bb-heading"><div><p class="bb-kicker">${L('LEARN. EARN. PLAY BALL.','APRENDE. GANA. JUEGA.')}</p><h1>${L('The Learning League','La Liga del Aprendizaje')}</h1></div><button class="bb-secondary bb-exit" type="button">${L('Save & leave','Guardar y salir')}</button></div><div class="bb-scoreboard"><div class="bb-score-team"><span class="bb-team-name"></span><strong data-score="home">0</strong></div><div class="bb-inning"><span>${L('INNING','ENTRADA')}</span><strong data-inning>1 / 3</strong><span class="bb-lights" aria-label="${L('Outs','Outs')}"></span></div><div class="bb-score-team bb-away"><span>${L('COMETS','COMETAS')}</span><strong data-score="away">0</strong></div></div><div class="bb-stadium-wrap"><canvas class="bb-stadium" width="1000" height="650" role="img" aria-label="${L('Baseball field. Watch the pitch approach the glowing home plate.','Campo de béisbol. Mira la pelota acercarse al plato brillante.')}"></canvas><div class="bb-stadium-tools"><button class="bb-mini bb-pause" type="button">${L('Pause','Pausa')}</button><button class="bb-mini bb-sound" type="button" aria-pressed="false">${L('Sound off','Sin sonido')}</button><span class="bb-speed-label"></span></div><div class="bb-result-banner" aria-hidden="true" hidden></div><div class="bb-overlay" hidden><div class="bb-overlay-card"></div></div><div class="bb-field-caption">${L('3 innings · 3 outs per inning','3 entradas · 3 outs por entrada')}</div></div><div class="bb-controls"><div class="bb-live"><strong class="bb-call" role="status" aria-live="polite"></strong><span class="bb-tip"></span><div class="bb-count"><span class="bb-strikes"></span><span class="bb-bases"></span></div></div><button class="bb-swing" type="button"></button></div><div class="bb-lower"><div class="bb-speed"><span>${L('Difficulty','Dificultad')}</span><button type="button" data-speed="easy">${L('Easy','Fácil')}</button><button type="button" data-speed="medium">${L('Medium','Medio')}</button><button type="button" data-speed="hard">${L('Hard','Difícil')}</button></div><button class="bb-rules-button" type="button" aria-expanded="false">${L('How to play','Cómo jugar')}</button></div><div class="bb-rules" hidden><p>${L('Tap “Pitch to me” to get ready. Watch the ball come toward you, then tap SWING when it reaches the bright ring at home plate. Pitch speeds change, so watch the ball itself. Tap the field or press Space to swing, too.','Toca “Lánzame” para empezar. Mira cómo se acerca la pelota y toca BATEAR cuando llegue al aro brillante del plato. La velocidad cambia, así que mira la pelota. También puedes tocar el campo o usar la barra espaciadora.')}</p><p>${L('Three strikes make one out. A foul adds a strike, but never the third. Hits move runners around the bases. Only three outs end your turn; scoring runs never ends an inning. Then the Comets take their automatic turn. Play 3 innings; a tie stays a tie.','Tres strikes son un out. Una bola fuera cuenta como strike, pero nunca como el tercero. Los hits mueven a los corredores. Solo tres outs terminan tu turno; anotar carreras no termina la entrada. Después, los Cometas juegan su turno automático. Juega 3 entradas; un empate queda como empate.')}</p><p>${L('Your progress saves after every pitch. Leaving and resuming this game costs no extra points. Baseball does not earn learning points.','Tu progreso se guarda después de cada lanzamiento. Salir y continuar este partido no cuesta más puntos. El béisbol no da puntos de aprendizaje.')}</p></div><div class="bb-boxscore" aria-label="${L('Runs by inning','Carreras por entrada')}"></div></section>`;
  const $=s=>host.querySelector(s),all=s=>[...host.querySelectorAll(s)];$('.bb-team-name').textContent=name.toLocaleUpperCase(lang);const canvas=$('.bb-stadium'),ctx=canvas.getContext('2d');
  const action=$('.bb-swing'),call=$('.bb-call'),tip=$('.bb-tip'),overlay=$('.bb-overlay'),overlayCard=$('.bb-overlay-card'),banner=$('.bb-result-banner');
  function save(){if(api.onSave)api.onSave(clone(state));}
@@ -4200,12 +4205,12 @@ function mount(host,api={}){
   $('.bb-lights').innerHTML=`<span>${L('OUTS','OUTS')}</span>`+[0,1,2].map(i=>`<i class="${i<displayOuts?'on':''}"></i>`).join('');$('.bb-lights').setAttribute('aria-label',displayOuts+' '+L('outs','outs'));
   $('.bb-strikes').textContent=L('Strikes: ','Strikes: ')+state.strikes+' / 3';$('.bb-bases').textContent=L('On base: ','En bases: ')+state.bases.filter(Boolean).length;
   $('.bb-sound').textContent=state.sound?L('Sound on','Con sonido'):L('Sound off','Sin sonido');$('.bb-sound').setAttribute('aria-pressed',String(!!state.sound));
-  $('.bb-speed-label').textContent=state.difficulty==='rookie'?L('ROOKIE','PRINCIPIANTE'):L('ALL-STAR','ESTRELLA');
+  $('.bb-speed-label').textContent=state.difficulty==='easy'?L('EASY','FÁCIL'):state.difficulty==='hard'?L('HARD','DIFÍCIL'):L('MEDIUM','MEDIO');
   all('[data-speed]').forEach(b=>{b.setAttribute('aria-pressed',String(b.dataset.speed===state.difficulty));b.disabled=phase!=='ready'||paused||state.status==='finished';});
   const table=document.createElement('table');table.innerHTML=`<thead><tr><th>${L('Team','Equipo')}</th><th>1</th><th>2</th><th>3</th><th>${L('Runs','Carreras')}</th></tr></thead><tbody><tr><th class="bb-box-name"></th>${state.playerByInning.map(n=>'<td>'+(n===null?'–':n)+'</td>').join('')}<td>${state.runs}</td></tr><tr><th>${L('Comets','Cometas')}</th>${state.opponentByInning.map(n=>'<td>'+(n===null?'–':n)+'</td>').join('')}<td>${state.opponentRuns}</td></tr></tbody>`;table.querySelector('.bb-box-name').textContent=name;$('.bb-boxscore').replaceChildren(table);
  }
  function ready(){phase='ready';elapsed=0;swingAt=-1;flight=null;result=null;banner.hidden=true;action.disabled=false;action.classList.remove('bb-is-swing');action.textContent=L('Pitch to me','Lánzame');setMessage(L('Step up to the plate!','¡Prepárate para batear!'),L('Watch the ball. Swing at the glowing ring.','Mira la pelota. Batea cuando llegue al aro.'));updateScore();}
- function startPitch(){if(state.sound)sound('ready');if(disposed||paused||state.status==='finished'||phase!=='ready')return;phase='windup';elapsed=0;swingAt=-1;const speedVariation=((state.seed+state.pitches*83)%7)*32;pitchDuration=(state.difficulty==='rookie'?1900:1450)+speedVariation;action.textContent=L('SWING!','¡BATEAR!');action.classList.add('bb-is-swing');setMessage(L('Here comes the pitch…','Ahí viene la pelota…'),L('Wait for the ball to reach the ring.','Espera a que la pelota llegue al aro.'));updateScore();}
+ function startPitch(){if(state.sound)sound('ready');if(disposed||paused||state.status==='finished'||phase!=='ready')return;phase='windup';elapsed=0;swingAt=-1;const pitch=nextPitch(state);pitchDuration=pitch.duration;pitchWindup=pitch.windup;pitchCurve=pitch.curve;save();action.textContent=L('SWING!','¡BATEAR!');action.classList.add('bb-is-swing');setMessage(L('Here comes the pitch…','Ahí viene la pelota…'),L('Wait for the ball to reach the ring.','Espera a que la pelota llegue al aro.'));updateScore();}
  function swing(){if(disposed||paused||state.status==='finished')return;if(phase==='ready'){startPitch();return;}if(phase!=='windup'&&phase!=='pitch')return;swingAt=0;const fraction=phase==='windup'?-.6:elapsed/pitchDuration;const offset=fraction-1;resolve(timingOutcome(offset,state.difficulty),offset);}
  function resolve(outcome,offset){
   const resolved=applyPlay(state,outcome);state=resolved.state;result=resolved.event;result.offset=offset;phase='result';elapsed=0;save();updateScore();action.disabled=true;action.textContent=L('Ball in play…','Jugada en marcha…');
@@ -4215,10 +4220,10 @@ function mount(host,api={}){
   else if(result.runs)body=result.runs+' '+L(result.runs===1?'run scores!':'runs score!',result.runs===1?'¡carrera!':'¡carreras!');
   else body=L('Keep your eye on the next pitch.','Sigue mirando la próxima pelota.');
   setMessage(head,body);banner.textContent=head;banner.dataset.kind=result.outcome;banner.hidden=false;
-  const side=((state.pitches*19)%11-5)/5;flight={outcome:result.outcome,target:{x:500+side*250,y:result.outcome==='homer'?155:result.outcome==='triple'?215:result.outcome==='double'?265:result.outcome==='single'?305:result.outcome==='flyout'?280:390},duration:result.outcome==='homer'?2350:1800};
+  const side=((state.pitches*19)%11-5)/5;flight={outcome:result.outcome,target:{x:500+side*250,y:result.outcome==='homer'?155:result.outcome==='triple'?215:result.outcome==='double'?265:result.outcome==='single'?305:result.outcome==='flyout'?280:390},duration:result.outcome==='homer'?1800:1150};
  }
  function afterResult(){
-  if(result&&result.endedInning){phase='opponent';elapsed=0;banner.hidden=true;action.textContent=L('Comets are batting…','Batean los Cometas…');setMessage(result.runLimit?L('Five-run inning! Teams switch.','¡Cinco carreras! Cambio de turno.'):L('Three outs! Teams switch.','¡Tres outs! Cambio de turno.'),L('The Comets take their automatic turn.','Los Cometas juegan su turno automático.'));}
+  if(result&&result.endedInning){phase='opponent';elapsed=0;banner.hidden=true;action.textContent=L('Comets are batting…','Batean los Cometas…');setMessage(L('Three outs! Teams switch.','¡Tres outs! Cambio de turno.'),L('The Comets take their automatic turn.','Los Cometas juegan su turno automático.'));}
   else ready();
  }
  function finish(){phase='finished';banner.hidden=true;action.disabled=true;action.textContent=L('Game complete','Partido terminado');updateScore();notifyFinish();showFinish();}
@@ -4254,16 +4259,16 @@ function mount(host,api={}){
   ellipse(500,420,40,21,'#c99366');roundRect(489,406,22,6,1,'#fff6df');ellipse(500,555,63,25,'#c99366');
   const shown=result&&phase==='result'?result.before.bases:state.bases;base(field.first,shown[0]);base(field.second,shown[1]);base(field.third,shown[2]);poly([{x:491,y:548},{x:509,y:548},{x:511,y:558},{x:500,y:566},{x:489,y:558}],'#fff9e8');
   // Target ring belongs to the plate, not an unrelated timing meter.
-  const ratio=phase==='pitch'?elapsed/pitchDuration:0;const hot=phase==='pitch'&&Math.abs(ratio-1)<.14;ctx.strokeStyle=hot?'#ffe07b':'#c1fbe5';ctx.lineWidth=hot?5:3;ctx.globalAlpha=phase==='windup'||phase==='pitch'?1:.55;ctx.beginPath();ctx.ellipse(500,529,27,15,0,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+  const hot=phase==='pitch';ctx.strokeStyle=hot?'#ffe07b':'#c1fbe5';ctx.lineWidth=hot?5:3;ctx.globalAlpha=phase==='windup'||phase==='pitch'?1:.55;ctx.beginPath();ctx.ellipse(500,529,27,15,0,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
   // Fielders react to the ball and its landing point.
   const positions=[{x:326,y:344},{x:647,y:343},{x:223,y:274},{x:501,y:260},{x:791,y:274},{x:691,y:411}];positions.forEach((p,i)=>{let x=p.x,y=p.y;if(phase==='result'&&flight&&!['strike','strikeout','foul'].includes(flight.outcome)){const q=Math.min(elapsed/flight.duration,1);const selected=flight.target.x<420?2:flight.target.x>600?4:3;if(i===selected){x+=(flight.target.x-x)*q*.8;y+=(flight.target.y-y)*q*.8;}}person(x,y,.62,'away');});
-  let pose=phase==='windup'?Math.sin(Math.min(elapsed/720,1)*Math.PI):phase==='pitch'?Math.max(0,1-elapsed/400):0;person(500,405,.95,'away',pose);
+  let pose=phase==='windup'?Math.sin(Math.min(elapsed/pitchWindup,1)*Math.PI):phase==='pitch'?Math.max(0,1-elapsed/400):0;person(500,405,.95,'away',pose);
   const swingPose=swingAt>=0?Math.sin(Math.min(swingAt/330,1)*Math.PI):0;person(452,574,1.5,'home',swingPose,true);person(526,593,.78,'away',.1);
   // Batting-box chalk and foreground stadium rail give depth.
   line([{x:437,y:541},{x:472,y:541},{x:472,y:584},{x:437,y:584},{x:437,y:541}],'#fff3d780',2);
   if(phase==='windup'){const hand={x:514+pose*9,y:381-pose*15};ball(hand.x,hand.y,5);}
   if(phase==='pitch'){
-   const q=clamp(elapsed/pitchDuration,0,1.28),x=500+Math.sin(q*Math.PI)*((state.pitches%3)-1)*14,y=374+155*Math.pow(q,1.35);ellipse(x,y+30,5+q*8,3+q*3,'#0a263633');line([{x:x-2,y:y-18},{x,y}],'#fff5d275',3);ball(x,y,5+q*9);
+   const q=clamp(elapsed/pitchDuration,0,1.28),x=500+Math.sin(q*Math.PI)*pitchCurve,y=374+155*Math.pow(q,1.35);ellipse(x,y+30,5+q*8,3+q*3,'#0a263633');line([{x:x-2,y:y-18},{x,y}],'#fff5d275',3);ball(x,y,5+q*9);
   }
   if(phase==='result'&&flight){
    const q=clamp(elapsed/flight.duration,0,1);if(!['strike','strikeout'].includes(flight.outcome)){
@@ -4273,16 +4278,1034 @@ function mount(host,api={}){
    const n={single:1,double:2,triple:3,homer:4}[result.outcome];if(n){const route=[field.home,field.first,field.second,field.third,field.home];const run=(start)=>{const dist=q*n,seg=Math.floor(dist),fract=dist-seg;const idx=start+seg;if(idx>=4)return;const a=route[idx],b=route[idx+1];person(a.x+(b.x-a.x)*fract,a.y+(b.y-a.y)*fract,.67,'home',Math.sin(t/60)*.3);};run(0);result.before.bases.forEach((yes,i)=>{if(yes)run(i+1);});}
    if(result.outcome==='homer'&&!reduced){for(let i=0;i<25;i++){const x=(i*137+elapsed*.1)%1000,y=(i*93+elapsed*.06)%360;ctx.fillStyle=['#ffdb7e','#e6f7f0','#77c3c5'][i%3];ctx.fillRect(x,y,5,8);}}
   }
-  if(phase==='opponent'){const q=(elapsed%900)/900;ball(500,380+q*135,5+q*8);ctx.fillStyle='#061a2eb8';ctx.fillRect(260,451,480,79);ctx.fillStyle='#ffdf94';ctx.font='bold 24px system-ui';ctx.textAlign='center';ctx.fillText(L('COMETS AT BAT','BATEAN LOS COMETAS'),500,483);ctx.fillStyle='#fff9e9';ctx.font='18px system-ui';ctx.fillText(elapsed>1050?(result.opponentAdded+' '+L(result.opponentAdded===1?'run scored':'runs scored',result.opponentAdded===1?'carrera':'carreras')):L('Your fielders take their turn…','Tus jugadores defienden…'),500,512);}
+  if(phase==='opponent'){const q=(elapsed%900)/900;ball(500,380+q*135,5+q*8);ctx.fillStyle='#061a2eb8';ctx.fillRect(260,451,480,79);ctx.fillStyle='#ffdf94';ctx.font='bold 24px system-ui';ctx.textAlign='center';ctx.fillText(L('COMETS AT BAT','BATEAN LOS COMETAS'),500,483);ctx.fillStyle='#fff9e9';ctx.font='18px system-ui';ctx.fillText(elapsed>650?(result.opponentAdded+' '+L(result.opponentAdded===1?'run scored':'runs scored',result.opponentAdded===1?'carrera':'carreras')):L('Your fielders take their turn…','Tus jugadores defienden…'),500,512);}
   // Rail drawn last keeps the illustrated ballpark feeling like a place.
   ctx.fillStyle='#102737';ctx.fillRect(0,628,1000,22);ctx.fillStyle='#496b73';ctx.fillRect(0,628,1000,4);for(let i=0;i<11;i++)roundRect(i*100+25,632,4,18,1,'#294650');
  }
  function ball(x,y,r){ellipse(x+2,y+3,r,r,'#10243b35');ellipse(x,y,r,r,'#fffbea');ctx.strokeStyle='#d15d55';ctx.lineWidth=Math.max(1,r*.12);ctx.beginPath();ctx.arc(x-r*.55,y,r*.72,-.95,.95);ctx.stroke();ctx.beginPath();ctx.arc(x+r*.55,y,r*.72,Math.PI-.95,Math.PI+.95);ctx.stroke();}
- function animate(now){if(disposed)return;const dt=last?Math.min(60,now-last):0;last=now;if(!paused){elapsed+=dt;if(swingAt>=0)swingAt+=dt;if(phase==='windup'&&elapsed>=720){phase='pitch';elapsed=0;}else if(phase==='pitch'&&elapsed>pitchDuration*1.33){swingAt=-1;resolve('strike',.4);}else if(phase==='result'&&elapsed>(flight?flight.duration:1800)+420){afterResult();}else if(phase==='opponent'&&elapsed>2450){if(state.status==='finished')finish();else ready();}stadium(now);}frame=requestAnimationFrame(animate);}
+ function animate(now){if(disposed)return;const dt=last?Math.min(60,now-last):0;last=now;if(!paused){elapsed+=dt;if(swingAt>=0)swingAt+=dt;if(phase==='windup'&&elapsed>=pitchWindup){phase='pitch';elapsed=0;}else if(phase==='pitch'&&elapsed>pitchDuration*1.33){swingAt=-1;resolve('strike',.4);}else if(phase==='result'&&elapsed>(flight?flight.duration:1150)+220){afterResult();}else if(phase==='opponent'&&elapsed>1600){if(state.status==='finished')finish();else ready();}stadium(now);}frame=requestAnimationFrame(animate);}
  ready();save();if(state.status==='finished')finish();frame=requestAnimationFrame(animate);
  return {dispose(){if(disposed)return;disposed=true;save();cancelAnimationFrame(frame);if(audioContext)audioContext.close().catch(()=>{});document.removeEventListener('visibilitychange',visibility);document.removeEventListener('keydown',key);},pause,saveState(){save();return clone(state);},getState:()=>clone(state)};
 }
-window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summary}};
+window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,nextPitch,applyPlay,summary}};
+})();
+
+;
+window.MLL_WONDER_PHOTOS={"faroe-2": {"src": "assets/wonders/faroe-2.jpg", "alt": "The steep coastal cliffs of Suðuroy in the Faroe Islands.", "credit": "Erik Christensen", "license": "CC BY-SA 3.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0", "source": "https://commons.wikimedia.org/wiki/File:Su%C3%B0uroy.FaroeIslands.2.jpg", "width": 1200, "height": 799, "title": "File:Suðuroy.FaroeIslands.2.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Los acantilados costeros de Suðuroy en las islas Feroe."}, "faroe": {"src": "assets/wonders/faroe.jpg", "alt": "Múlafossur waterfall falls from the green cliffs at Gásadalur.", "credit": "Eric Welch eric_welch", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Faroe_Islands_(Unsplash_eRwWGWkh0vU).jpg", "title": "File:Faroe Islands (Unsplash eRwWGWkh0vU).jpg", "width": 1200, "height": 800, "changes": "Resized and compressed; cards may crop.", "altEs": "La cascada Múlafossur cae desde los acantilados verdes de Gásadalur."}, "faroe-3": {"src": "assets/wonders/faroe-3.jpg", "alt": "Faroese sheep above the village of Sumba.", "credit": "kallerna", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Faroese_sheep_Sumba_1.jpg", "width": 1200, "height": 833, "title": "File:Faroese_sheep_Sumba_1.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Ovejas de las Feroe sobre el pueblo de Sumba."}, "victoria": {"src": "assets/wonders/victoria-3.jpg", "alt": "Morning light and rising mist at Victoria Falls.", "credit": "lumoplank", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Victoria_Falls_-_VicFalls3464.jpg", "width": 1200, "height": 800, "title": "File:Victoria_Falls_-_VicFalls3464.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Luz de la mañana y neblina en las cataratas Victoria."}, "victoria-3": {"src": "assets/wonders/victoria.jpg", "alt": "Victoria Falls and its clouds of water spray.", "credit": "Diego Delso", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Cataratas_Victoria,_Zambia-Zimbabue,_2018-07-27,_DD_04.jpg", "width": 772, "height": 1200, "title": "File:Cataratas_Victoria,_Zambia-Zimbabue,_2018-07-27,_DD_04.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Las cataratas Victoria y sus nubes de agua pulverizada."}, "victoria-2": {"src": "assets/wonders/victoria-2.jpg", "alt": "An aerial view shows the wide Zambezi River plunging into a narrow gorge.", "credit": "lumoplank", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Victoria_Falls_-_VicFalls3456.jpg", "width": 1200, "height": 800, "title": "File:Victoria_Falls_-_VicFalls3456.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una vista aérea del ancho río Zambeze cayendo en una garganta estrecha."}, "iceland-lights-3": {"src": "assets/wonders/iceland-lights-3.jpg", "alt": "Kirkjufell mountain in daylight.", "credit": "Anjali Kiggal", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Kirkjufell_in_Iceland.jpg", "width": 1200, "height": 801, "title": "File:Kirkjufell_in_Iceland.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "La montaña Kirkjufell a la luz del día."}, "iceland-lights-2": {"src": "assets/wonders/iceland-lights-2.jpg", "alt": "Northern lights over Kirkjufell, seen from Grundarfjörður.", "credit": "Chr Grundo", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Northern_Lights_over_Kirkjufell_seen_from_Grundarfj%C3%B6r%C3%B0ur.jpg", "width": 1200, "height": 800, "title": "File:Northern Lights over Kirkjufell seen from Grundarfjörður.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Auroras sobre Kirkjufell vistas desde Grundarfjörður."}, "iceland-lights": {"src": "assets/wonders/iceland-lights.jpg", "alt": "Northern lights above Kirkjufell mountain in Iceland.", "credit": "vaidyanathan", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Aurora_Borealis_activity_on_top_of_the_Kirkjufell_mountain_in_September_2018.jpg", "width": 1200, "height": 857, "title": "File:Aurora Borealis activity on top of the Kirkjufell mountain in September 2018.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Auroras boreales sobre Kirkjufell en Islandia."}, "maasai-mara-3": {"src": "assets/wonders/maasai-mara-3.jpg", "alt": "A giraffe in the Maasai Mara landscape.", "credit": "HasselbladWhisperer", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Masai_Mara_Giraffe.jpg", "width": 1200, "height": 797, "title": "File:Masai_Mara_Giraffe.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una jirafa en el paisaje de Masái Mara."}, "maasai-mara": {"src": "assets/wonders/maasai-mara.jpg", "alt": "Wildebeest and zebras together on the Maasai Mara grasslands.", "credit": "Key45", "license": "CC BY 2.0", "licenseUrl": "https://creativecommons.org/licenses/by/2.0", "source": "https://commons.wikimedia.org/wiki/File:GnusAndZebrasInMaraMasai.jpg", "width": 1200, "height": 783, "title": "File:GnusAndZebrasInMaraMasai.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Ñus y cebras juntos en las praderas de Masái Mara."}, "maasai-mara-2": {"src": "assets/wonders/maasai-mara-2.jpg", "alt": "A cheetah with cubs in the Maasai Mara.", "credit": "Siddharth Maheshwari", "license": "CC BY-SA 3.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0", "source": "https://commons.wikimedia.org/wiki/File:Cheetah_with_cubs.jpg", "width": 1200, "height": 644, "title": "File:Cheetah_with_cubs.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un guepardo con sus crías en Masái Mara."}, "octopus": {"src": "assets/wonders/octopus.jpg", "alt": "An octopus among the rocks underwater.", "credit": "albert kok", "license": "CC BY-SA 3.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0", "source": "https://commons.wikimedia.org/wiki/File:Octopus2.jpg", "width": 1200, "height": 913, "title": "File:Octopus2.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un pulpo entre las rocas bajo el agua."}, "axolotl": {"src": "assets/wonders/axolotl.jpg", "alt": "An axolotl with feathery external gills.", "credit": "LoKiLeCh", "license": "CC BY-SA 3.0", "licenseUrl": "http://creativecommons.org/licenses/by-sa/3.0/", "source": "https://commons.wikimedia.org/wiki/File:Axolotl_ganz.jpg", "width": 1200, "height": 669, "title": "File:Axolotl_ganz.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un ajolote con branquias externas como plumas."}, "coral": {"src": "assets/wonders/coral.jpg", "alt": "A blue sea star among the corals of a reef.", "credit": "Richard Ling <wikipedia@rling.com>", "license": "CC BY-SA 3.0", "licenseUrl": "http://creativecommons.org/licenses/by-sa/3.0/", "source": "https://commons.wikimedia.org/wiki/File:Blue_Linckia_Starfish.JPG", "width": 900, "height": 1200, "title": "File:Blue_Linckia_Starfish.JPG", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una estrella de mar azul entre los corales de un arrecife."}, "cheetah": {"src": "assets/wonders/cheetah.jpg", "alt": "A cheetah with spotted fur and a long tail.", "credit": "AfricanConservation", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Male_cheetah_facing_left_in_South_Africa.jpg", "width": 1200, "height": 800, "title": "File:Male_cheetah_facing_left_in_South_Africa.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un guepardo con pelaje manchado y cola larga."}, "elephant": {"src": "assets/wonders/elephant.jpg", "alt": "An African bush elephant in Etosha National Park.", "credit": "Giles Laurent", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:178_Male_African_bush_elephant_in_Etosha_National_Park_Photo_by_Giles_Laurent.jpg", "width": 1000, "height": 666, "title": "File:178 Male African bush elephant in Etosha National Park Photo by Giles Laurent.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un elefante africano en el parque nacional de Etosha."}, "owl": {"src": "assets/wonders/owl.jpg", "alt": "An American barn owl perched on a post.", "credit": "Charles J. Sharp", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:American_Barn_Owl_(Tyto_furcata_guatemalae),_Orange_Walk.jpg", "width": 666, "height": 1000, "title": "File:American Barn Owl (Tyto furcata guatemalae), Orange Walk.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una lechuza americana posada en un poste."}, "bat": {"src": "assets/wonders/bat.jpg", "alt": "A little brown bat held by a gloved wildlife handler.", "credit": "SMBishop", "license": "CC BY-SA 3.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0", "source": "https://commons.wikimedia.org/wiki/File:Little_Brown_Myotis_(cropped).JPG", "width": 945, "height": 1000, "title": "File:Little Brown Myotis (cropped).JPG", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un murciélago pequeño sostenido por un especialista con guantes."}, "turtle": {"src": "assets/wonders/turtle.jpg", "alt": "A green sea turtle swimming in clear ocean water.", "credit": "Charles J. Sharp", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Green_sea_turtle_(Chelonia_mydas)_Moorea.jpg", "width": 1000, "height": 666, "title": "File:Green sea turtle (Chelonia mydas) Moorea.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una tortuga verde nadando en agua marina transparente."}};
+window.MLL_NEW_LESSONS=[
+  {
+    "section": "ocean",
+    "id": "sunlight",
+    "title": [
+      "The sunlight switch",
+      "El interruptor del Sol"
+    ],
+    "icon": "depth",
+    "facts": [
+      [
+        "Most ocean sunlight is in the top 200 meters.",
+        "Deeper down, the water gets darker. Below about 1,000 meters, sunlight does not reach.",
+        "Deep-sea animals cannot depend on sunshine to see."
+      ],
+      [
+        "La mayor parte de la luz solar del océano está en los primeros 200 metros.",
+        "Más abajo, el agua se oscurece. A más de unos 1.000 metros, no llega la luz del Sol.",
+        "Los animales de las profundidades no pueden depender del Sol para ver."
+      ]
+    ],
+    "question": [
+      "What happens as you dive deeper?",
+      "¿Qué pasa al bajar más?"
+    ],
+    "options": [
+      [
+        "It gets darker",
+        "It gets sunnier",
+        "The water disappears"
+      ],
+      [
+        "Se oscurece",
+        "Hay más sol",
+        "Desaparece el agua"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://ocean.si.edu/ecosystems/deep-sea/deep-sea"
+  },
+  {
+    "section": "ocean",
+    "id": "living-lights",
+    "title": [
+      "Living flashlights",
+      "Linternas vivas"
+    ],
+    "icon": "glow",
+    "facts": [
+      [
+        "Some ocean animals make their own light through a chemical reaction.",
+        "This light is called bioluminescence.",
+        "It can help an animal attract food, find a mate, or startle a hunter."
+      ],
+      [
+        "Algunos animales marinos producen luz con una reacción química.",
+        "Esta luz se llama bioluminiscencia.",
+        "Puede ayudar a atraer comida, encontrar pareja o asustar a un cazador."
+      ]
+    ],
+    "question": [
+      "What makes an animal’s bioluminescent light?",
+      "¿Qué produce la luz bioluminiscente?"
+    ],
+    "options": [
+      [
+        "A tiny battery",
+        "A chemical reaction",
+        "A light bulb"
+      ],
+      [
+        "Una pila pequeña",
+        "Una reacción química",
+        "Un foco"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://ocean.si.edu/ocean-life/fish/bioluminescence"
+  },
+  {
+    "section": "ocean",
+    "id": "coral",
+    "title": [
+      "A city built by animals",
+      "Una ciudad de animales"
+    ],
+    "icon": "coral",
+    "facts": [
+      [
+        "Corals are animals, not rocks or plants.",
+        "Tiny animals called polyps build the hard skeletons of many reefs.",
+        "A reef has hiding places for fish, crabs, and many other neighbors."
+      ],
+      [
+        "Los corales son animales, no rocas ni plantas.",
+        "Animales pequeños llamados pólipos construyen los esqueletos duros de muchos arrecifes.",
+        "Un arrecife tiene escondites para peces, cangrejos y muchos vecinos más."
+      ]
+    ],
+    "question": [
+      "What are corals?",
+      "¿Qué son los corales?"
+    ],
+    "options": [
+      [
+        "Plants",
+        "Painted rocks",
+        "Animals"
+      ],
+      [
+        "Plantas",
+        "Rocas pintadas",
+        "Animales"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://ocean.si.edu/ocean-life/invertebrates/corals-and-coral-reefs"
+  },
+  {
+    "section": "ocean",
+    "id": "vents",
+    "title": [
+      "Hot chimneys underwater",
+      "Chimeneas bajo el agua"
+    ],
+    "icon": "vent",
+    "facts": [
+      [
+        "Deep-sea vents release water heated inside Earth.",
+        "No sunlight reaches these deep places.",
+        "Some tiny living things use chemicals for energy, helping feed a whole community."
+      ],
+      [
+        "Las fuentes del fondo marino sueltan agua calentada dentro de la Tierra.",
+        "La luz del Sol no llega a estos lugares profundos.",
+        "Algunos seres diminutos usan sustancias químicas para obtener energía y alimentar a una comunidad."
+      ]
+    ],
+    "question": [
+      "What heats the water at a deep-sea vent?",
+      "¿Qué calienta el agua de estas fuentes?"
+    ],
+    "options": [
+      [
+        "Heat inside Earth",
+        "A giant kettle",
+        "Sunshine on the sand"
+      ],
+      [
+        "El calor de la Tierra",
+        "Una tetera gigante",
+        "El Sol sobre la arena"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://ocean.si.edu/ocean-life/invertebrates/submarine-volcanoes-and-hydrothermal-vents"
+  },
+  {
+    "section": "ocean",
+    "id": "turtles",
+    "title": [
+      "An ocean traveler",
+      "Un viajero del océano"
+    ],
+    "icon": "turtle",
+    "facts": [
+      [
+        "Sea turtles are reptiles that breathe air.",
+        "They must come to the surface to breathe.",
+        "Female sea turtles lay their eggs in nests on land."
+      ],
+      [
+        "Las tortugas marinas son reptiles que respiran aire.",
+        "Deben subir a la superficie para respirar.",
+        "Las hembras ponen huevos en nidos en tierra."
+      ]
+    ],
+    "question": [
+      "Why does a sea turtle come to the surface?",
+      "¿Por qué sube una tortuga marina?"
+    ],
+    "options": [
+      [
+        "To grow wings",
+        "To breathe air",
+        "To turn into a fish"
+      ],
+      [
+        "Para tener alas",
+        "Para respirar aire",
+        "Para convertirse en pez"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://www.fisheries.noaa.gov/sea-turtles"
+  },
+  {
+    "section": "ocean",
+    "id": "octopus",
+    "title": [
+      "Eight-arm escape artist",
+      "Un escapista de ocho brazos"
+    ],
+    "icon": "octopus",
+    "facts": [
+      [
+        "An octopus has eight arms lined with suckers.",
+        "Most octopuses have no hard shell, so they can squeeze through tight spaces.",
+        "They can change their skin’s color and texture to hide."
+      ],
+      [
+        "Un pulpo tiene ocho brazos con ventosas.",
+        "La mayoría no tiene una concha dura y puede pasar por espacios estrechos.",
+        "Puede cambiar el color y la textura de su piel para esconderse."
+      ]
+    ],
+    "question": [
+      "Which trick helps an octopus hide?",
+      "¿Qué truco ayuda al pulpo a esconderse?"
+    ],
+    "options": [
+      [
+        "Growing feathers",
+        "Ringing a bell",
+        "Changing its skin"
+      ],
+      [
+        "Tener plumas",
+        "Tocar una campana",
+        "Cambiar su piel"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://ocean.si.edu/ocean-life/invertebrates/octopuses-squids-and-relatives"
+  },
+  {
+    "section": "animals",
+    "id": "axolotl",
+    "title": [
+      "The regrowing wonder",
+      "El asombroso ajolote"
+    ],
+    "icon": "axolotl",
+    "facts": [
+      [
+        "An axolotl is a salamander that usually keeps its feathery outside gills as an adult.",
+        "It can regrow a lost leg. People cannot do that!",
+        "Wild axolotls come from waterways around Mexico City."
+      ],
+      [
+        "El ajolote es una salamandra que suele conservar sus branquias externas al crecer.",
+        "Puede volver a formar una pata perdida. ¡Las personas no podemos!",
+        "Los ajolotes silvestres son de los canales de la zona de Ciudad de México."
+      ]
+    ],
+    "question": [
+      "What can an axolotl regrow?",
+      "¿Qué puede volver a formar un ajolote?"
+    ],
+    "options": [
+      [
+        "A lost leg",
+        "A bicycle",
+        "A feather coat"
+      ],
+      [
+        "Una pata perdida",
+        "Una bicicleta",
+        "Un abrigo de plumas"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://animals.sandiegozoo.org/animals/axolotl"
+  },
+  {
+    "section": "animals",
+    "id": "cheetah",
+    "title": [
+      "Built for a sprint",
+      "Hecho para correr"
+    ],
+    "icon": "cheetah",
+    "facts": [
+      [
+        "A cheetah is the fastest land animal.",
+        "Its long tail helps it balance when it turns at speed.",
+        "It runs fast in short bursts, not all day."
+      ],
+      [
+        "El guepardo es el animal terrestre más rápido.",
+        "Su cola larga le ayuda a mantener el equilibrio al girar.",
+        "Corre muy rápido por poco tiempo, no todo el día."
+      ]
+    ],
+    "question": [
+      "What helps a cheetah balance in a turn?",
+      "¿Qué ayuda al guepardo a mantener el equilibrio?"
+    ],
+    "options": [
+      [
+        "A helmet",
+        "Its tail",
+        "Its spots"
+      ],
+      [
+        "Un casco",
+        "Su cola",
+        "Sus manchas"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://animals.sandiegozoo.org/animals/cheetah"
+  },
+  {
+    "section": "animals",
+    "id": "bat",
+    "title": [
+      "Seeing with echoes",
+      "Escuchar los ecos"
+    ],
+    "icon": "bat",
+    "facts": [
+      [
+        "Many bats send out high sounds and listen for the echoes.",
+        "The echoes help them find insects and avoid obstacles.",
+        "Bats are mammals, and they are not blind."
+      ],
+      [
+        "Muchos murciélagos emiten sonidos agudos y escuchan sus ecos.",
+        "Los ecos les ayudan a encontrar insectos y evitar obstáculos.",
+        "Los murciélagos son mamíferos y no son ciegos."
+      ]
+    ],
+    "question": [
+      "What does an echo do?",
+      "¿Qué hace un eco?"
+    ],
+    "options": [
+      [
+        "Turns sound into ice",
+        "Makes a new wing",
+        "Bounces sound back"
+      ],
+      [
+        "Convierte sonido en hielo",
+        "Crea un ala",
+        "Devuelve el sonido"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://animals.sandiegozoo.org/animals/bat"
+  },
+  {
+    "section": "animals",
+    "id": "elephant",
+    "title": [
+      "A nose that can grab",
+      "Una nariz que agarra"
+    ],
+    "icon": "elephant",
+    "facts": [
+      [
+        "An elephant’s trunk is a long nose and upper lip.",
+        "It can grab food, smell, and pull up water.",
+        "To drink, the elephant squirts that water into its mouth."
+      ],
+      [
+        "La trompa del elefante es su nariz y labio superior alargados.",
+        "Puede agarrar comida, oler y recoger agua.",
+        "Para beber, el elefante echa esa agua en su boca."
+      ]
+    ],
+    "question": [
+      "Where does the elephant put water to drink it?",
+      "¿Dónde pone el agua para beberla?"
+    ],
+    "options": [
+      [
+        "Into its mouth",
+        "Into its ears",
+        "Onto its back"
+      ],
+      [
+        "En la boca",
+        "En las orejas",
+        "En la espalda"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://animals.sandiegozoo.org/animals/elephant"
+  },
+  {
+    "section": "animals",
+    "id": "owl",
+    "title": [
+      "A quiet night hunter",
+      "Un cazador silencioso"
+    ],
+    "icon": "owl",
+    "facts": [
+      [
+        "Many owls hunt when light is low.",
+        "Special feather edges help many owls fly quietly.",
+        "An owl turns its head far around, but not in a full circle."
+      ],
+      [
+        "Muchos búhos cazan cuando hay poca luz.",
+        "Los bordes especiales de sus plumas ayudan a muchos a volar en silencio.",
+        "Un búho puede girar mucho la cabeza, pero no dar una vuelta completa."
+      ]
+    ],
+    "question": [
+      "What helps many owls fly quietly?",
+      "¿Qué ayuda a muchos búhos a volar en silencio?"
+    ],
+    "options": [
+      [
+        "Rubber wings",
+        "Special feathers",
+        "Tiny engines"
+      ],
+      [
+        "Alas de goma",
+        "Plumas especiales",
+        "Motores pequeños"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://animals.sandiegozoo.org/animals/owl"
+  },
+  {
+    "section": "animals",
+    "id": "camouflage",
+    "title": [
+      "The disappearing octopus",
+      "El pulpo que desaparece"
+    ],
+    "icon": "octopus",
+    "facts": [
+      [
+        "An octopus can blend into the seafloor.",
+        "Changing color and skin texture helps break up its outline.",
+        "Camouflage can hide a hunter as well as the animal being hunted."
+      ],
+      [
+        "Un pulpo puede confundirse con el fondo marino.",
+        "Cambiar de color y textura ayuda a disimular su forma.",
+        "El camuflaje puede esconder al cazador y también a su presa."
+      ]
+    ],
+    "question": [
+      "What is camouflage for?",
+      "¿Para qué sirve el camuflaje?"
+    ],
+    "options": [
+      [
+        "Making louder noises",
+        "Growing taller",
+        "Blending with the surroundings"
+      ],
+      [
+        "Hacer más ruido",
+        "Crecer más alto",
+        "Confundirse con el entorno"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://ocean.si.edu/ocean-life/invertebrates/octopuses-squids-and-relatives"
+  },
+  {
+    "section": "works",
+    "id": "circuit",
+    "title": [
+      "Make a light turn on",
+      "Enciende una luz"
+    ],
+    "icon": "circuit",
+    "facts": [
+      [
+        "A simple electric circuit needs a complete path.",
+        "A battery supplies energy, and wires connect the parts.",
+        "Opening a switch breaks the path and turns the light off."
+      ],
+      [
+        "Un circuito eléctrico sencillo necesita un camino completo.",
+        "Una pila aporta energía y los cables conectan las piezas.",
+        "Abrir el interruptor corta el camino y apaga la luz."
+      ]
+    ],
+    "question": [
+      "What happens when the switch breaks the path?",
+      "¿Qué pasa cuando el interruptor corta el camino?"
+    ],
+    "options": [
+      [
+        "The light goes off",
+        "The battery grows",
+        "The wire melts every time"
+      ],
+      [
+        "Se apaga la luz",
+        "La pila crece",
+        "El cable siempre se derrite"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://www.sciencebuddies.org/blog/circuits-lessons"
+  },
+  {
+    "section": "works",
+    "id": "gears",
+    "title": [
+      "Teeth that turn wheels",
+      "Dientes que giran ruedas"
+    ],
+    "icon": "gears",
+    "facts": [
+      [
+        "Gears are wheels with teeth that fit together.",
+        "Two touching gears turn in opposite directions.",
+        "Changing gear sizes can change how fast a wheel turns."
+      ],
+      [
+        "Los engranajes son ruedas con dientes que encajan.",
+        "Dos engranajes que se tocan giran en sentidos contrarios.",
+        "Cambiar sus tamaños puede cambiar la velocidad de giro."
+      ]
+    ],
+    "question": [
+      "Two touching gears turn…",
+      "Dos engranajes que se tocan giran…"
+    ],
+    "options": [
+      [
+        "Only at night",
+        "In opposite directions",
+        "Without moving"
+      ],
+      [
+        "Solo de noche",
+        "En sentidos contrarios",
+        "Sin moverse"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://education.lego.com/en-us/lessons/sm/gears/"
+  },
+  {
+    "section": "works",
+    "id": "flight",
+    "title": [
+      "How can a plane stay up?",
+      "¿Cómo vuela un avión?"
+    ],
+    "icon": "plane",
+    "facts": [
+      [
+        "Wings moving through air can produce lift.",
+        "Gravity pulls the airplane downward.",
+        "Engines provide thrust, while drag resists motion through the air."
+      ],
+      [
+        "Las alas que se mueven por el aire pueden producir sustentación.",
+        "La gravedad tira del avión hacia abajo.",
+        "Los motores dan empuje y la resistencia del aire frena el movimiento."
+      ]
+    ],
+    "question": [
+      "Which force pulls a plane down?",
+      "¿Qué fuerza tira del avión hacia abajo?"
+    ],
+    "options": [
+      [
+        "Paint",
+        "Thrust",
+        "Gravity"
+      ],
+      [
+        "La pintura",
+        "El empuje",
+        "La gravedad"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://www.nasa.gov/learning-resources/for-kids-and-students/what-is-aerodynamics-grades-k-4/"
+  },
+  {
+    "section": "works",
+    "id": "bridge",
+    "title": [
+      "Why bridges use triangles",
+      "¿Por qué usan triángulos?"
+    ],
+    "icon": "bridge",
+    "facts": [
+      [
+        "A triangle made from rigid bars keeps its shape when its corners can pivot.",
+        "A four-sided frame can lean sideways unless it has extra support.",
+        "Engineers choose shapes and materials together to build strong bridges."
+      ],
+      [
+        "Un triángulo de barras rígidas mantiene su forma aunque sus uniones puedan girar.",
+        "Un marco de cuatro lados puede inclinarse si no tiene apoyo adicional.",
+        "Los ingenieros eligen formas y materiales para hacer puentes resistentes."
+      ]
+    ],
+    "question": [
+      "Which bar helps stop a square frame leaning?",
+      "¿Qué barra ayuda a que un marco cuadrado no se incline?"
+    ],
+    "options": [
+      [
+        "A diagonal bar",
+        "An invisible bar",
+        "A bar lying nearby"
+      ],
+      [
+        "Una barra diagonal",
+        "Una barra invisible",
+        "Una barra en el suelo"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://www.sciencebuddies.org/stem-activities/popsicle-stick-trusses-what-shape-is-strongest"
+  },
+  {
+    "section": "works",
+    "id": "sound",
+    "title": [
+      "Sound is a wiggle",
+      "El sonido es vibración"
+    ],
+    "icon": "sound",
+    "facts": [
+      [
+        "Sound starts with something vibrating: moving back and forth.",
+        "Vibrations travel through air to your ears.",
+        "Sound can also travel through water and solids."
+      ],
+      [
+        "El sonido comienza con algo que vibra: se mueve de un lado al otro.",
+        "Las vibraciones viajan por el aire hasta tus oídos.",
+        "El sonido también puede viajar por agua y sólidos."
+      ]
+    ],
+    "question": [
+      "What starts a sound?",
+      "¿Qué inicia un sonido?"
+    ],
+    "options": [
+      [
+        "A shadow",
+        "A vibration",
+        "A color"
+      ],
+      [
+        "Una sombra",
+        "Una vibración",
+        "Un color"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://www.nidcd.nih.gov/health/how-do-we-hear"
+  },
+  {
+    "section": "works",
+    "id": "friction",
+    "title": [
+      "The force that slows a slide",
+      "La fuerza que frena"
+    ],
+    "icon": "friction",
+    "facts": [
+      [
+        "Friction is a force between surfaces touching each other.",
+        "It can slow a sliding object.",
+        "Your shoe grips the ground using friction, helping you walk without slipping."
+      ],
+      [
+        "La fricción es una fuerza entre superficies que se tocan.",
+        "Puede frenar un objeto que se desliza.",
+        "Tus zapatos se agarran al suelo gracias a la fricción."
+      ]
+    ],
+    "question": [
+      "Why is friction useful for shoes?",
+      "¿Por qué es útil la fricción en los zapatos?"
+    ],
+    "options": [
+      [
+        "It makes them glow",
+        "It makes them float",
+        "It helps them grip"
+      ],
+      [
+        "Los hace brillar",
+        "Los hace flotar",
+        "Les ayuda a agarrarse"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://www.sciencebuddies.org/stem-activities/slippery-science-explore-friction-by-launching-stuff"
+  },
+  {
+    "section": "sports",
+    "id": "arc",
+    "title": [
+      "Why a ball comes back down",
+      "¿Por qué baja la pelota?"
+    ],
+    "icon": "ball",
+    "facts": [
+      [
+        "A kicked ball keeps moving forward while gravity pulls it down.",
+        "This makes its path curve through the air.",
+        "Try different launch angles in our simplified ball lab."
+      ],
+      [
+        "Una pelota pateada avanza mientras la gravedad la atrae hacia abajo.",
+        "Por eso su camino por el aire es curvo.",
+        "Prueba distintos ángulos en nuestro laboratorio de pelotas simplificado."
+      ]
+    ],
+    "question": [
+      "What pulls a flying ball down?",
+      "¿Qué hace bajar una pelota?"
+    ],
+    "options": [
+      [
+        "Gravity",
+        "Its color",
+        "The scoreboard"
+      ],
+      [
+        "La gravedad",
+        "Su color",
+        "El marcador"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/forces-on-a-baseball/"
+  },
+  {
+    "section": "sports",
+    "id": "spin",
+    "title": [
+      "A spinning ball can curve",
+      "Una pelota con efecto"
+    ],
+    "icon": "spin",
+    "facts": [
+      [
+        "A spinning ball can push air differently on its two sides.",
+        "That can make its path bend.",
+        "Baseball pitchers and soccer players use spin to surprise opponents."
+      ],
+      [
+        "Una pelota que gira puede empujar el aire de forma distinta a cada lado.",
+        "Eso puede curvar su camino.",
+        "Lanzadores de béisbol y futbolistas usan el giro para sorprender."
+      ]
+    ],
+    "question": [
+      "What can help a ball’s path bend?",
+      "¿Qué puede curvar el camino de una pelota?"
+    ],
+    "options": [
+      [
+        "A painted number",
+        "Spin",
+        "A loud cheer"
+      ],
+      [
+        "Un número pintado",
+        "El giro",
+        "Un grito"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/forces-on-a-baseball/"
+  },
+  {
+    "section": "sports",
+    "id": "bounce",
+    "title": [
+      "A bounce stores energy",
+      "La energía del rebote"
+    ],
+    "icon": "bounce",
+    "facts": [
+      [
+        "A ball squashes a little when it hits the ground.",
+        "As it springs back toward its shape, it can bounce up.",
+        "Some energy becomes heat and sound, so each bounce is usually lower."
+      ],
+      [
+        "Una pelota se aplasta un poco al tocar el suelo.",
+        "Al recuperar su forma, puede rebotar hacia arriba.",
+        "Parte de la energía se vuelve calor y sonido, por eso suele rebotar cada vez menos."
+      ]
+    ],
+    "question": [
+      "Why are later bounces usually lower?",
+      "¿Por qué suele bajar la altura de los rebotes?"
+    ],
+    "options": [
+      [
+        "Gravity stops working",
+        "The floor gets taller",
+        "Some energy becomes heat and sound"
+      ],
+      [
+        "La gravedad deja de funcionar",
+        "El piso sube",
+        "Parte de la energía se vuelve calor y sonido"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://www.sciencebuddies.org/science-fair-projects/project-ideas/Sports_p038/sports-science/bouncing-basketball-energy"
+  },
+  {
+    "section": "sports",
+    "id": "grip",
+    "title": [
+      "Shoes that hold the ground",
+      "Zapatos que se agarran"
+    ],
+    "icon": "friction",
+    "facts": [
+      [
+        "Friction helps a player push against the ground.",
+        "Shoe tread and field conditions affect grip.",
+        "A slippery surface can make a quick turn harder."
+      ],
+      [
+        "La fricción ayuda al jugador a empujar contra el suelo.",
+        "La suela y las condiciones de la cancha afectan el agarre.",
+        "Una superficie resbalosa puede dificultar un giro rápido."
+      ]
+    ],
+    "question": [
+      "Which surface makes slipping more likely?",
+      "¿Qué superficie facilita resbalarse?"
+    ],
+    "options": [
+      [
+        "A slippery one",
+        "One with good grip",
+        "One painted blue"
+      ],
+      [
+        "Una resbalosa",
+        "Una con buen agarre",
+        "Una pintada de azul"
+      ]
+    ],
+    "answer": 0,
+    "source": "https://www.sciencebuddies.org/stem-activities/slippery-science-explore-friction-by-launching-stuff"
+  },
+  {
+    "section": "sports",
+    "id": "reaction",
+    "title": [
+      "Your brain’s relay team",
+      "El equipo de tu cerebro"
+    ],
+    "icon": "reaction",
+    "facts": [
+      [
+        "Your eyes notice a ball coming toward you.",
+        "Your brain uses that information and sends messages to your muscles.",
+        "Reaction time is the time between noticing a signal and starting a response."
+      ],
+      [
+        "Tus ojos notan que viene una pelota.",
+        "Tu cerebro usa esa información y envía mensajes a tus músculos.",
+        "El tiempo de reacción va desde notar una señal hasta empezar a responder."
+      ]
+    ],
+    "question": [
+      "What sends messages to your muscles?",
+      "¿Qué envía mensajes a tus músculos?"
+    ],
+    "options": [
+      [
+        "The stadium lights",
+        "Your brain",
+        "Your shoes"
+      ],
+      [
+        "Las luces",
+        "Tu cerebro",
+        "Tus zapatos"
+      ]
+    ],
+    "answer": 1,
+    "source": "https://www.ninds.nih.gov/health-information/public-education/brain-basics"
+  },
+  {
+    "section": "sports",
+    "id": "fair-test",
+    "title": [
+      "Be a sports scientist",
+      "Sé un científico deportivo"
+    ],
+    "icon": "test",
+    "facts": [
+      [
+        "A fair test changes one thing at a time.",
+        "To compare ball bounces, drop each ball from the same height onto the same surface.",
+        "Repeat your tests: one lucky bounce is not enough evidence."
+      ],
+      [
+        "Una prueba justa cambia una sola cosa a la vez.",
+        "Para comparar rebotes, suelta cada pelota desde la misma altura sobre la misma superficie.",
+        "Repite las pruebas: un rebote afortunado no es suficiente."
+      ]
+    ],
+    "question": [
+      "Which is a fair bounce comparison?",
+      "¿Cuál es una comparación justa?"
+    ],
+    "options": [
+      [
+        "Different heights each time",
+        "Different floors each time",
+        "Same height and same floor"
+      ],
+      [
+        "Distintas alturas",
+        "Distintos pisos",
+        "Misma altura y mismo piso"
+      ]
+    ],
+    "answer": 2,
+    "source": "https://www.sciencebuddies.org/science-fair-projects/science-fair/variables"
+  }
+];
+window.MLL_PLACES_A.push(...[{"id": "faroe", "name": "Faroe Islands", "country": "Faroe Islands", "lat": 62.107, "lon": -7.435, "category": "Nature", "hook": "A waterfall that falls off an island!", "facts": ["Múlafossur waterfall tumbles over a green cliff toward the Atlantic Ocean.", "The Faroe Islands are a group of 18 main islands between Iceland and Norway.", "Sheep graze on grassy slopes, and seabirds nest on steep cliffs."], "stretch": {"question": "Why might people use tunnels here?", "answer": "Mountains and steep cliffs can make travel difficult. Tunnels let roads pass through rock."}, "sources": [{"title": "Visit Faroe Islands: Múlafossur", "url": "https://visitfaroeislands.com/en/whatson/places/place/mulafossur-the-waterfall-in-gasadalur?lang=en"}, {"title": "Visit Faroe Islands: island guide", "url": "https://visitfaroeislands.com/en/see-do/inspiration-guides/tips-from-travellers/best-things-to-do-in-the-faroe-islands"}], "quiz": {"question": "Where does Múlafossur fall?", "options": ["Toward the ocean", "Into a desert", "Inside a cave"], "answer": 0, "explain": "Múlafossur waterfall tumbles over a green cliff toward the Atlantic Ocean."}, "quiz2": {"question": "How many main islands make up the Faroes?", "options": ["2", "18", "180"], "answer": 1, "explain": "The Faroe Islands are a group of 18 main islands between Iceland and Norway."}}, {"id": "victoria", "name": "Victoria Falls", "country": "Zambia & Zimbabwe", "lat": -17.924, "lon": 25.857, "category": "Nature", "hook": "A wall of water wider than a mile.", "facts": ["The Zambezi River drops into a deep crack at the border of Zambia and Zimbabwe.", "The waterfall stretches about 1,700 meters across—more than a mile!", "Its local name, Mosi-oa-Tunya, means “the smoke that thunders”: the “smoke” is water spray."], "stretch": {"question": "Can water spray make a rainbow?", "answer": "Yes! Sunlight can bend and reflect inside water droplets, separating into colors."}, "sources": [{"title": "UNESCO: Mosi-oa-Tunya / Victoria Falls", "url": "https://whc.unesco.org/en/list/509"}], "quiz": {"question": "Which river tumbles over these falls?", "options": ["Amazon", "Zambezi", "Nile"], "answer": 1, "explain": "The Zambezi River drops into a deep crack at the border of Zambia and Zimbabwe."}, "quiz2": {"question": "About how wide are these falls?", "options": ["17 meters", "170 meters", "1,700 meters"], "answer": 2, "explain": "The waterfall stretches about 1,700 meters across—more than a mile!"}}, {"id": "iceland-lights", "name": "Iceland’s Northern Lights", "country": "Iceland", "lat": 64.941, "lon": -23.307, "category": "Nature", "hook": "A mountain under a glowing sky.", "facts": ["Near Kirkjufell mountain, northern lights sometimes glow above the coast.", "The Sun sends tiny particles into space. Some help make gases high above Earth glow.", "You need dark skies and good conditions; the lights do not appear every night."], "stretch": {"question": "Would bright city lights help you see an aurora?", "answer": "No. A dark place away from bright lights makes a faint aurora easier to spot. Cameras may show brighter colors than your eyes see."}, "sources": [{"title": "Visit Iceland: Northern lights", "url": "https://www.visiticeland.com/article/northern-lights-in-iceland/"}, {"title": "NASA: What is an aurora?", "url": "https://spaceplace.nasa.gov/aurora/en/"}], "quiz": {"question": "What is glowing above the mountain?", "options": ["Paint on clouds", "Northern lights", "A giant TV"], "answer": 1, "explain": "Near Kirkjufell mountain, northern lights sometimes glow above the coast."}, "quiz2": {"question": "Where does the aurora’s light form?", "options": ["Inside the mountain", "Under the sea", "High in the atmosphere"], "answer": 2, "explain": "The Sun sends tiny particles into space. Some help make gases high above Earth glow."}}, {"id": "maasai-mara", "name": "Maasai Mara", "country": "Kenya", "lat": -1.493, "lon": 35.144, "category": "Nature", "hook": "A grassland full of wild neighbors.", "facts": ["The Maasai Mara is a huge wildlife area in Kenya, in East Africa.", "Wildebeest and zebras move between this area and Tanzania’s Serengeti as they follow fresh grass.", "Lions, cheetahs, elephants, and giraffes also live in this landscape."], "stretch": {"question": "What changes if the rains arrive late?", "answer": "Fresh grass may grow at a different time. The herds follow food and water, not a calendar."}, "sources": [{"title": "Kenya Tourism Board: Maasai Mara", "url": "https://magicalkenya.com/"}, {"title": "Maasai Mara wildlife", "url": "https://webmail.magicalkenya.com/default.nsf/doc21/4YGEX3ADMY6?e=1&l=1&opendocument=&s=2"}], "quiz": {"question": "Which country is the Maasai Mara in?", "options": ["Iceland", "Ecuador", "Kenya"], "answer": 2, "explain": "The Maasai Mara is a huge wildlife area in Kenya, in East Africa."}, "quiz2": {"question": "Why do the herds move?", "options": ["To find fresh grass", "To visit a shop", "To build houses"], "answer": 0, "explain": "Wildebeest and zebras move between this area and Tanzania’s Serengeti as they follow fresh grass."}}]);
+window.MLL_ES_A.push(...[{"id": "faroe", "name": "Islas Feroe", "country": "Islas Feroe", "lat": 62.107, "lon": -7.435, "category": "Nature", "hook": "¡Una cascada que cae desde una isla!", "facts": ["La cascada Múlafossur cae desde un acantilado verde hacia el océano Atlántico.", "Las Feroe son un grupo de 18 islas principales entre Islandia y Noruega.", "Las ovejas pastan en laderas verdes y las aves marinas anidan en acantilados."], "stretch": {"question": "¿Por qué se usan túneles aquí?", "answer": "Las montañas y los acantilados dificultan viajar. Los túneles permiten que los caminos atraviesen la roca."}, "sources": [{"title": "Visit Faroe Islands: Múlafossur", "url": "https://visitfaroeislands.com/en/whatson/places/place/mulafossur-the-waterfall-in-gasadalur?lang=en"}, {"title": "Visit Faroe Islands: island guide", "url": "https://visitfaroeislands.com/en/see-do/inspiration-guides/tips-from-travellers/best-things-to-do-in-the-faroe-islands"}], "quiz": {"question": "¿Hacia dónde cae Múlafossur?", "options": ["Hacia el océano", "En un desierto", "Dentro de una cueva"], "answer": 0, "explain": "La cascada Múlafossur cae desde un acantilado verde hacia el océano Atlántico."}, "quiz2": {"question": "¿Cuántas islas principales forman las Feroe?", "options": ["2", "18", "180"], "answer": 1, "explain": "Las Feroe son un grupo de 18 islas principales entre Islandia y Noruega."}}, {"id": "victoria", "name": "Cataratas Victoria", "country": "Zambia y Zimbabue", "lat": -17.924, "lon": 25.857, "category": "Nature", "hook": "Una pared de agua de más de un kilómetro.", "facts": ["El río Zambeze cae en una grieta profunda entre Zambia y Zimbabue.", "¡La cascada mide unos 1.700 metros de ancho, más de una milla!", "Su nombre local, Mosi-oa-Tunya, significa «el humo que truena»: ese «humo» es agua pulverizada."], "stretch": {"question": "¿El agua pulverizada puede formar un arcoíris?", "answer": "¡Sí! La luz del Sol puede desviarse y reflejarse dentro de las gotas, separándose en colores."}, "sources": [{"title": "UNESCO: Mosi-oa-Tunya / Victoria Falls", "url": "https://whc.unesco.org/en/list/509"}], "quiz": {"question": "¿Qué río cae por estas cataratas?", "options": ["Amazonas", "Zambeze", "Nilo"], "answer": 1, "explain": "El río Zambeze cae en una grieta profunda entre Zambia y Zimbabue."}, "quiz2": {"question": "¿Qué ancho tienen aproximadamente?", "options": ["17 metros", "170 metros", "1.700 metros"], "answer": 2, "explain": "¡La cascada mide unos 1.700 metros de ancho, más de una milla!"}}, {"id": "iceland-lights", "name": "Auroras de Islandia", "country": "Islandia", "lat": 64.941, "lon": -23.307, "category": "Nature", "hook": "Una montaña bajo un cielo brillante.", "facts": ["Cerca de la montaña Kirkjufell, a veces las auroras brillan sobre la costa.", "El Sol envía partículas diminutas al espacio. Algunas hacen brillar gases en lo alto de la atmósfera terrestre.", "Se necesitan cielos oscuros y buenas condiciones; las luces no aparecen todas las noches."], "stretch": {"question": "¿Las luces de la ciudad ayudan a ver auroras?", "answer": "No. Un lugar oscuro facilita ver una aurora tenue. Las cámaras pueden mostrar colores más intensos que tus ojos."}, "sources": [{"title": "Visit Iceland: Northern lights", "url": "https://www.visiticeland.com/article/northern-lights-in-iceland/"}, {"title": "NASA: What is an aurora?", "url": "https://spaceplace.nasa.gov/aurora/en/"}], "quiz": {"question": "¿Qué brilla sobre la montaña?", "options": ["Pintura en las nubes", "Auroras boreales", "Un televisor gigante"], "answer": 1, "explain": "Cerca de la montaña Kirkjufell, a veces las auroras brillan sobre la costa."}, "quiz2": {"question": "¿Dónde se forma la luz de la aurora?", "options": ["Dentro de la montaña", "Bajo el mar", "En lo alto de la atmósfera"], "answer": 2, "explain": "El Sol envía partículas diminutas al espacio. Algunas hacen brillar gases en lo alto de la atmósfera terrestre."}}, {"id": "maasai-mara", "name": "Masái Mara", "country": "Kenia", "lat": -1.493, "lon": 35.144, "category": "Nature", "hook": "Una pradera llena de vecinos salvajes.", "facts": ["Masái Mara es una gran zona de vida silvestre en Kenia, en África oriental.", "Ñus y cebras viajan entre esta zona y el Serengeti de Tanzania en busca de pasto fresco.", "Leones, guepardos, elefantes y jirafas también viven en este paisaje."], "stretch": {"question": "¿Qué pasa si las lluvias llegan tarde?", "answer": "El pasto fresco puede crecer en otro momento. Las manadas siguen la comida y el agua, no un calendario."}, "sources": [{"title": "Kenya Tourism Board: Maasai Mara", "url": "https://magicalkenya.com/"}, {"title": "Maasai Mara wildlife", "url": "https://webmail.magicalkenya.com/default.nsf/doc21/4YGEX3ADMY6?e=1&l=1&opendocument=&s=2"}], "quiz": {"question": "¿En qué país está Masái Mara?", "options": ["Islandia", "Ecuador", "Kenia"], "answer": 2, "explain": "Masái Mara es una gran zona de vida silvestre en Kenia, en África oriental."}, "quiz2": {"question": "¿Por qué se mueven las manadas?", "options": ["Para buscar pasto fresco", "Para ir de compras", "Para construir casas"], "answer": 0, "explain": "Ñus y cebras viajan entre esta zona y el Serengeti de Tanzania en busca de pasto fresco."}}]);
+Object.assign(window.MLL_PHOTOS,{"faroe": {"src": "assets/wonders/faroe.jpg", "alt": "Múlafossur waterfall falls from the green cliffs at Gásadalur.", "credit": "Eric Welch eric_welch", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Faroe_Islands_(Unsplash_eRwWGWkh0vU).jpg", "title": "File:Faroe Islands (Unsplash eRwWGWkh0vU).jpg", "width": 1200, "height": 800, "changes": "Resized and compressed; cards may crop.", "altEs": "La cascada Múlafossur cae desde los acantilados verdes de Gásadalur."}, "victoria": {"src": "assets/wonders/victoria-3.jpg", "alt": "Morning light and rising mist at Victoria Falls.", "credit": "lumoplank", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Victoria_Falls_-_VicFalls3464.jpg", "width": 1200, "height": 800, "title": "File:Victoria_Falls_-_VicFalls3464.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Luz de la mañana y neblina en las cataratas Victoria."}, "iceland-lights": {"src": "assets/wonders/iceland-lights.jpg", "alt": "Northern lights above Kirkjufell mountain in Iceland.", "credit": "vaidyanathan", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Aurora_Borealis_activity_on_top_of_the_Kirkjufell_mountain_in_September_2018.jpg", "width": 1200, "height": 857, "title": "File:Aurora Borealis activity on top of the Kirkjufell mountain in September 2018.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Auroras boreales sobre Kirkjufell en Islandia."}, "maasai-mara": {"src": "assets/wonders/maasai-mara.jpg", "alt": "Wildebeest and zebras together on the Maasai Mara grasslands.", "credit": "Key45", "license": "CC BY 2.0", "licenseUrl": "https://creativecommons.org/licenses/by/2.0", "source": "https://commons.wikimedia.org/wiki/File:GnusAndZebrasInMaraMasai.jpg", "width": 1200, "height": 783, "title": "File:GnusAndZebrasInMaraMasai.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Ñus y cebras juntos en las praderas de Masái Mara."}});
+Object.assign(window.MLL_ES_PHOTO_ALT,{"faroe": "La cascada Múlafossur cae desde los acantilados verdes de Gásadalur.", "victoria": "Luz de la mañana y neblina en las cataratas Victoria.", "iceland-lights": "Auroras boreales sobre Kirkjufell en Islandia.", "maasai-mara": "Ñus y cebras juntos en las praderas de Masái Mara."});
+Object.assign(window.MLL_GALLERY_A,{"faroe": [{"src": "assets/wonders/faroe-2.jpg", "alt": "The steep coastal cliffs of Suðuroy in the Faroe Islands.", "credit": "Erik Christensen", "license": "CC BY-SA 3.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0", "source": "https://commons.wikimedia.org/wiki/File:Su%C3%B0uroy.FaroeIslands.2.jpg", "width": 1200, "height": 799, "title": "File:Suðuroy.FaroeIslands.2.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Los acantilados costeros de Suðuroy en las islas Feroe."}, {"src": "assets/wonders/faroe-3.jpg", "alt": "Faroese sheep above the village of Sumba.", "credit": "kallerna", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Faroese_sheep_Sumba_1.jpg", "width": 1200, "height": 833, "title": "File:Faroese_sheep_Sumba_1.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Ovejas de las Feroe sobre el pueblo de Sumba."}], "victoria": [{"src": "assets/wonders/victoria-2.jpg", "alt": "An aerial view shows the wide Zambezi River plunging into a narrow gorge.", "credit": "lumoplank", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Victoria_Falls_-_VicFalls3456.jpg", "width": 1200, "height": 800, "title": "File:Victoria_Falls_-_VicFalls3456.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una vista aérea del ancho río Zambeze cayendo en una garganta estrecha."}, {"src": "assets/wonders/victoria.jpg", "alt": "Victoria Falls and its clouds of water spray.", "credit": "Diego Delso", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Cataratas_Victoria,_Zambia-Zimbabue,_2018-07-27,_DD_04.jpg", "width": 772, "height": 1200, "title": "File:Cataratas_Victoria,_Zambia-Zimbabue,_2018-07-27,_DD_04.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Las cataratas Victoria y sus nubes de agua pulverizada."}], "iceland-lights": [{"src": "assets/wonders/iceland-lights-2.jpg", "alt": "Northern lights over Kirkjufell, seen from Grundarfjörður.", "credit": "Chr Grundo", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Northern_Lights_over_Kirkjufell_seen_from_Grundarfj%C3%B6r%C3%B0ur.jpg", "width": 1200, "height": 800, "title": "File:Northern Lights over Kirkjufell seen from Grundarfjörður.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Auroras sobre Kirkjufell vistas desde Grundarfjörður."}, {"src": "assets/wonders/iceland-lights-3.jpg", "alt": "Kirkjufell mountain in daylight.", "credit": "Anjali Kiggal", "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0", "source": "https://commons.wikimedia.org/wiki/File:Kirkjufell_in_Iceland.jpg", "width": 1200, "height": 801, "title": "File:Kirkjufell_in_Iceland.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "La montaña Kirkjufell a la luz del día."}], "maasai-mara": [{"src": "assets/wonders/maasai-mara-2.jpg", "alt": "A cheetah with cubs in the Maasai Mara.", "credit": "Siddharth Maheshwari", "license": "CC BY-SA 3.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0", "source": "https://commons.wikimedia.org/wiki/File:Cheetah_with_cubs.jpg", "width": 1200, "height": 644, "title": "File:Cheetah_with_cubs.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Un guepardo con sus crías en Masái Mara."}, {"src": "assets/wonders/maasai-mara-3.jpg", "alt": "A giraffe in the Maasai Mara landscape.", "credit": "HasselbladWhisperer", "license": "CC0", "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "source": "https://commons.wikimedia.org/wiki/File:Masai_Mara_Giraffe.jpg", "width": 1200, "height": 797, "title": "File:Masai_Mara_Giraffe.jpg", "changes": "Resized and compressed. Cards crop the photograph.", "altEs": "Una jirafa en el paisaje de Masái Mara."}]});
+// Family ties supplied by Max's parent: keep place connections, omit relationship explanations.
+(function(){
+const notes={
+'mar-del-plata':["Tío Eduardo is from Mar del Plata. Ask him what he loved doing by the sea!","Tío Eduardo es de Mar del Plata. ¡Pregúntale qué le gustaba hacer junto al mar!"],
+'medellin':["Tía Andrea is from Medellín. Ask her about a favorite place in the city!","Tía Andrea es de Medellín. ¡Pregúntale por un lugar favorito de la ciudad!"],
+'kirkland':["Dad is from Kirkland. Nana and your uncle still live here. Ask Dad about his favorite childhood adventure!","Papá es de Kirkland. Nana y tu tío todavía viven aquí. ¡Pregúntale por su aventura favorita de la infancia!"],
+'las-terrenas':["Mom’s family celebrated her 40th birthday in Las Terrenas! Ask her about a favorite memory from the trip.","¡La familia de Mamá celebró sus 40 años en Las Terrenas! Pregúntale por un recuerdo favorito del viaje."],
+'galapagos':["Mom and Dad visited the Galápagos Islands. Ask them which animal surprised them most!","Mamá y Papá visitaron las islas Galápagos. ¡Pregúntales qué animal los sorprendió más!"]};
+for(const name of ['MLL_PLACES_FAMILY','MLL_FAMILY_EXTRA','MLL_FAMILY_NEW','MLL_ES_FAMILY','MLL_ES_FAMILY_EXTRA','MLL_ES_FAMILY_NEW'])for(const p of window[name]||[])if(notes[p.id])p.familyNote=notes[p.id][name.includes('_ES_')?1:0];
+})();
+
+;
+/* Six bilingual learning areas. Original illustrations and touch activities. */
+(function(){
+'use strict';
+const LESSONS=window.MLL_NEW_LESSONS;
+const sections={ocean:['Ocean Explorers','Exploradores del océano','Dive into a hidden world.','Sumérgete en un mundo escondido.','coral'],works:['How Things Work','Cómo funcionan las cosas','Look inside everyday wonders.','Descubre cómo funcionan las cosas.','gears'],animals:['Animal Superpowers','Superpoderes animales','Real animals. Amazing abilities.','Animales reales. Habilidades increíbles.','axolotl'],sports:['Sports Science','Ciencia del deporte','Discover the science behind the game.','Descubre la ciencia del deporte.','ball']};
+const E=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
+function B(text,fn,cls='button'){const b=E('button',cls,text);b.type='button';b.onclick=fn;return b;}
+function A(text,href,cls='button ghost'){const a=E('a',cls,text);a.href=href;return a;}
+function art(kind){let shapes='';
+ const circle=(x,y,r,fill)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`;
+ if(kind==='depth')shapes='<rect y="105" width="320" height="105" fill="#071b32"/><path d="M0 105h320M0 158h320" stroke="#4ea6c0" stroke-dasharray="6 6"/>'+circle(70,41,23,'#ffcc76')+'<path d="M70 71v23m-39-31 17 19m64-19-17 19" stroke="#ffcc76" stroke-width="4"/><rect x="170" y="133" width="66" height="30" rx="15" fill="#eab66d"/>'+circle(192,148,9,'#173950')+'<path d="M263 32v145m-10-13 10 13 10-13" stroke="#8be4dd" stroke-width="4" fill="none"/>';
+ else if(kind==='glow')shapes='<path d="M99 111a61 61 0 0 1 122 0z" fill="#93efdf" opacity=".75"/><path d="M110 111q-15 36 8 66m17-66q16 22-1 71m22-71q-16 35 9 79m15-79q21 30 3 69m22-69q-13 28 12 56" stroke="#a8fff1" stroke-width="4" fill="none"/>'+circle(57,59,3,'#a8fff1')+circle(255,97,4,'#a8fff1');
+ else if(kind==='vent')shapes='<path d="M0 186l52-22 46 11 39-23 48 18 60-18 75 27v31H0z" fill="#54747d"/><path d="M105 177l9-82 24 4 8 68m35 3 5-54 23-3 10 67" stroke="#b4bba2" stroke-width="10" fill="#697e76"/><path d="M125 90q-20-25 5-45m65 58q22-20 4-41" stroke="#bddecd" stroke-width="17" stroke-linecap="round" opacity=".35" fill="none"/>'+circle(137,30,6,'#8cd1c8')+circle(186,44,4,'#8cd1c8');
+ else if(['ball','spin','bounce','reaction','test'].includes(kind))shapes='<path d="M45 160 Q140 -30 260 148" fill="none" stroke="#8be4dd" stroke-width="3" stroke-dasharray="7 7"/>'+circle(160,74,41,'#ffb15e')+'<path d="M120 73h80m-40-40v82m-28-73q52 33 0 63m56-63q-52 33 0 63" stroke="#573324" stroke-width="3" fill="none"/><path d="M32 161h255" stroke="#b5eeee" stroke-width="4"/>';
+ else if(kind==='gears')shapes=[{x:116,y:98,r:47},{x:207,y:98,r:43}].map((g,i)=>`<g class="lab-gear gear-${i}" style="transform-origin:${g.x}px ${g.y}px">`+Array.from({length:12},(_,j)=>`<rect x="${g.x-9}" y="${g.y-g.r-12}" width="18" height="23" rx="3" fill="${i?'#ffb15e':'#77dacf'}" transform="rotate(${j*30} ${g.x} ${g.y})"/>`).join('')+circle(g.x,g.y,g.r,i?'#ffb15e':'#77dacf')+circle(g.x,g.y,17,'#102f40')+'</g>').join('');
+ else if(kind==='bridge')shapes='<path d="M25 140h270M30 140L95 60 160 140 225 60 290 140M95 60h130M95 60v80M225 60v80" fill="none" stroke="#7cddd0" stroke-width="9" stroke-linejoin="round"/><path d="M30 144v35m260-35v35" stroke="#ffb15e" stroke-width="14"/>';
+ else if(kind==='circuit')shapes='<path d="M68 145V62h60m40 0h86v83H68" fill="none" stroke="#7cddd0" stroke-width="7"/><path d="M128 62l39-28" stroke="#ffb15e" stroke-width="7"/><rect x="51" y="103" width="34" height="50" rx="4" fill="#e9bc64"/><path d="M58 115h19m-10-9v18" stroke="#163849" stroke-width="3"/>'+circle(254,104,24,'#f9e4ab')+'<path d="M244 105l20 0m-10-10v20" stroke="#7e652b" stroke-width="3"/>';
+ else if(kind==='plane')shapes='<path d="M42 109l100-20 20-54 23-1-7 55 90 15 17 11-107 8-19 42-15-1 4-41-97 5z" fill="#d7f1ec"/><path d="M48 68h57m-76 21h57m-29 60h59" stroke="#ffb15e" stroke-width="5"/>';
+ else if(kind==='friction')shapes='<path d="M34 156h252" stroke="#a9d8c4" stroke-width="7"/><path d="M78 119v-34h60l20 35 61 15v15H75z" fill="#ffb15e"/><path d="M51 174h84m-84 0 16-11m-16 11 16 11" stroke="#7cddd0" stroke-width="5" fill="none"/>';
+ else if(kind==='sound'||kind==='bat')shapes='<path d="M68 82h30l36-30v106l-36-30H68z" fill="#7cddd0"/><path d="M155 75q28 30 0 60m22-80q50 50 0 100m25-122q70 70 0 144" stroke="#ffb15e" stroke-width="7" fill="none"/>';
+ else if(kind==='lemonade')shapes='<path d="M63 91h195v83H63z" fill="#eab66d"/><path d="M47 49h225l-13 42H61z" fill="#7cddd0"/><path d="M76 28v145m171-145v145" stroke="#e7ebd6" stroke-width="7"/><path d="M129 110h50l-6 45h-37z" fill="#fff7b0"/>'+circle(226,136,15,'#f3db51')+'<path d="M155 115l12-25" stroke="white" stroke-width="4"/>';
+ else if(kind==='build')shapes=Array.from({length:3},(_,r)=>Array.from({length:5-r*2},(_,c)=>`<rect x="${46+r*46+c*46}" y="${143-r*46}" width="41" height="41" rx="5" fill="${['#79d8ce','#efb570','#b8b1ed'][r]}"/>`).join('')).join('');
+ else if(['octopus','axolotl','coral','turtle','cheetah','elephant','owl'].includes(kind)){
+ const icons={octopus:'🐙',axolotl:'🦎',coral:'🪸',turtle:'🐢',cheetah:'🐆',elephant:'🐘',owl:'🦉'};shapes=`<text x="160" y="144" text-anchor="middle" font-size="100">${icons[kind]}</text>`;
+ }else shapes='<path d="M10 120q40-28 80 0t80 0 80 0 80 0M10 150q40-28 80 0t80 0 80 0 80 0" stroke="#7cddd0" stroke-width="5" fill="none"/>'+circle(170,70,25,kind==='glow'?'#d8ffa7':'#ffb15e');
+ return `<svg viewBox="0 0 320 210" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="320" height="210" rx="20" fill="#123448"/>${shapes}</svg>`;
+}
+function illustration(kind,cls='lab-art'){const n=E('div',cls);n.innerHTML=art(kind);return n;}
+function mount(host,path,api){const L=(a,b)=>api.lang==='es'?b:a,P=pair=>pair[api.lang==='es'?1:0];let disposed=false,timer=null,frame=null;
+ const area=path[1],id=path[2];host.classList.add('new-lab');
+ const nav=E('nav','page-nav');nav.append(A(L('← Home','← Inicio'),'#home'));if(sections[area]&&id)nav.append(A('← '+P(sections[area]),'#learn/'+area));host.append(nav);
+ function heading(title,sub){host.append(E('p','eyebrow',L('MAX’S LEARNING LAB','EL LABORATORIO DE MAX')),E('h1','',title),E('p','lab-intro',sub));}
+ function reward(key){return api.answer('practice:lab6:'+key);}
+ function question(parent,key,q,opts,right,explain){const box=E('section','quiz-card lab-question'),status=E('p','quiz-feedback');status.setAttribute('role','status');box.dataset.labQuestion=key;box.append(E('p','eyebrow',L('YOUR TURN','TU TURNO')),E('h2','',q));const buttons=E('div','quiz-options');let done=false;opts.map((o,i)=>({o,i,r:Math.random()})).sort((a,b)=>a.r-b.r).forEach(({o,i})=>buttons.append(B(o,()=>{if(done)return;if(i===right){done=true;const fresh=reward(key);status.textContent=L('Yes! ','¡Sí! ')+(explain||'')+(fresh?L(' +1 learning point!',' ¡+1 punto de aprendizaje!'):L(' Already earned—great practice!',' Ya lo ganaste. ¡Buena práctica!'));[...buttons.children].forEach(b=>b.disabled=true);[...buttons.children].find(b=>b.textContent===o)?.classList.add('correct');}else{status.textContent=L('Try again. Use the clues above.','Inténtalo otra vez. Usa las pistas de arriba.');buttons.children[i].classList.add('retry');}},'')));box.append(buttons,status);parent.append(box);}
+ function photo(key,alt,showCredit=true){const meta=window.MLL_WONDER_PHOTOS?.[key];if(!meta)return illustration(key);const f=E('figure','lab-photo'),im=E('img');im.src=meta.src.replace(/^assets\//,document.documentElement.dataset.assetLayout==='flat'?'':'assets/');im.alt=alt;im.loading='lazy';if(key==='owl')im.style.objectPosition='50% 15%';f.append(im);const c=E('figcaption','photo-credit');c.append(document.createTextNode(meta.credit+' · '));const a=A(meta.license,meta.source,'');a.target='_blank';a.rel='noopener';c.append(a);if(showCredit)f.append(c);return f;}
+ if(sections[area]){
+ const sec=sections[area];const lesson=LESSONS.find(x=>x.section===area&&x.id===id);
+ if(!lesson){heading(P(sec),sec[api.lang==='es'?3:2]);const exp=E('section','lab-experiment');host.append(exp);
+ if(area==='ocean')depth(exp);if(area==='works')circuit(exp);if(area==='sports')trajectory(exp);if(area==='animals')camouflage(exp);
+ const grid=E('div','lab-lessons');LESSONS.filter(x=>x.section===area).forEach(x=>{const a=A('','#learn/'+area+'/'+x.id,'lab-lesson');if(['axolotl','cheetah','octopus','coral','turtle','elephant','bat','owl'].includes(x.icon))a.append(photo(x.icon,P(x.title),false));else a.append(illustration(x.icon));a.append(E('h2','',P(x.title)),E('span','lab-card-cta',L('Discover →','Descubrir →')));grid.append(a);});host.append(grid);
+ }else{heading(P(lesson.title),P(sec));const layout=E('div','lab-detail');const visual=['axolotl','cheetah','octopus','coral','turtle','elephant','bat','owl'].includes(lesson.icon)?photo(lesson.icon,P(lesson.title)):illustration(lesson.icon);const copy=E('div');const facts=E('ol','fact-list');P(lesson.facts).forEach(f=>facts.append(E('li','',f)));copy.append(facts);question(copy,area+':'+lesson.id,P(lesson.question),P(lesson.options),lesson.answer,P(lesson.options)[lesson.answer]+'.');const source=E('details','fact-sources');source.append(E('summary','',L('Fact source','Fuente de los datos')),A(L('Read the reference','Leer la referencia'),lesson.source,''));copy.append(source);layout.append(visual,copy);host.append(layout);const all=LESSONS.filter(x=>x.section===area),next=all[(all.indexOf(lesson)+1)%all.length];host.append(A(L('Next discovery →','Siguiente descubrimiento →'),'#learn/'+area+'/'+next.id));}
+ }else if(area==='lemonade')lemonade();else if(area==='build')build();else{heading(L('Choose a lab','Elige un laboratorio'),'');Object.entries(sections).forEach(([k,v])=>host.append(A(P(v),'#learn/'+k)));}
+ function depth(parent){parent.append(E('h2','',L('Take the depth elevator','Baja en el ascensor marino')));const scene=E('div','depth-scene'),sub=E('div','submarine','◉'),dots=E('div','depth-dots','·   ✦       ·    ✦');scene.append(sub,dots);const label=E('label','lab-control-label',L('Depth','Profundidad')),slider=E('input');slider.type='range';slider.min=0;slider.max=4000;slider.step=100;slider.value=api.get('depth',0);slider.id='depth-control';label.htmlFor=slider.id;const out=E('p','lab-readout'),hint=E('p');function update(){const d=+slider.value;api.set('depth',d);out.textContent=d.toLocaleString(api.lang)+' m · '+(d<200?L('Sunlight zone','Zona de luz'):d<1000?L('Twilight zone','Zona crepuscular'):L('Midnight zone','Zona de medianoche'));hint.textContent=d<200?L('Enough sunlight for algae to make food.','Hay luz para que las algas produzcan alimento.'):d<1000?L('Only faint sunlight reaches here.','Aquí llega muy poca luz solar.'):L('No sunlight here. Some animals make their own light!','Aquí no llega el Sol. ¡Algunos animales producen luz!');scene.style.background=`hsl(208 70% ${Math.max(5,45-d/100)}%)`;sub.style.top=(16+d/4000*54)+'%';dots.style.opacity=d>=1000?'1':'0';}slider.oninput=update;parent.append(scene,label,slider,out,hint);update();question(parent,'depth-test',L('At 2,000 meters, could sunlight light your path?','A 2.000 metros, ¿iluminaría el Sol tu camino?'),[L('Yes','Sí'),L('No','No')],1,L('Sunlight does not reach this deep.','La luz solar no llega tan abajo.'));}
+ function circuit(parent){parent.append(E('h2','',L('Complete the circuit','Completa el circuito')));const scene=illustration('circuit','circuit-scene');const status=E('p','lab-readout');let closed=!!api.get('circuit',false);const button=B('',()=>{closed=!closed;api.set('circuit',closed);draw();},'button primary');function draw(){scene.classList.toggle('circuit-closed',closed);scene.querySelector('svg').innerHTML=art('circuit').match(/<svg[^>]*>([\s\S]*)<\/svg>/)[1];if(closed){scene.querySelector('path:nth-of-type(2)').setAttribute('d','M128 62h40');scene.querySelector('circle').setAttribute('fill','#ffe76d');}button.textContent=closed?L('Open switch','Abrir interruptor'):L('Close switch','Cerrar interruptor');button.setAttribute('aria-pressed',String(closed));status.textContent=closed?L('Complete path → light ON','Camino completo → luz ENCENDIDA'):L('Broken path → light OFF','Camino cortado → luz APAGADA');}parent.append(scene,button,status,E('p','small-note',L('A screen model of a battery circuit.','Un modelo en pantalla de un circuito con pila.')));draw();question(parent,'circuit-test',L('What must the path be for the light to stay on?','¿Cómo debe estar el camino para encender la luz?'),[L('Complete','Completo'),L('Broken','Cortado')],0,'');}
+ function trajectory(parent){parent.append(E('h2','',L('Max’s ball-flight lab','El laboratorio de pelotas')));const scene=E('div','trajectory');scene.innerHTML='<svg viewBox="0 0 600 240" role="img"><path d="M20 220h560" stroke="#92bfb7" stroke-width="3"/><path class="flight-path" fill="none" stroke="#7cddd0" stroke-width="4"/><circle class="flight-ball" r="10" fill="#ffb15e"/></svg>';scene.querySelector('svg').setAttribute('aria-label',L('Ball path in a model without air resistance','Camino de una pelota sin resistencia del aire'));const label=E('label','lab-control-label',L('Launch angle','Ángulo de lanzamiento')),input=E('input');input.type='range';input.min=15;input.max=75;input.step=5;input.value=api.get('angle',45);input.id='angle-control';label.htmlFor=input.id;const out=E('p','lab-readout');let flightPoints=[];function draw(){if(frame)cancelAnimationFrame(frame);const a=+input.value;api.set('angle',a);let pts=[];const rad=a*Math.PI/180,v=20,g=9.81,t=2*v*Math.sin(rad)/g;for(let i=0;i<=60;i++){const tt=t*i/60;pts.push([25+v*Math.cos(rad)*tt*12,220-(v*Math.sin(rad)*tt-.5*g*tt*tt)*9]);}scene.querySelector('.flight-path').setAttribute('d',pts.map((p,i)=>(i?'L':'M')+p.join(' ')).join(' '));flightPoints=pts;const end=pts[0];scene.querySelector('.flight-ball').setAttribute('cx',end[0]);scene.querySelector('.flight-ball').setAttribute('cy',end[1]);out.textContent=a+'° · '+L('Range: ','Distancia: ')+(v*v*Math.sin(2*rad)/g).toFixed(1)+' m';}input.oninput=draw;const launch=B(L('Launch the ball','Lanzar la pelota'),()=>{if(frame)cancelAnimationFrame(frame);let started=null;function tick(time){if(disposed)return;started??=time;const i=matchMedia('(prefers-reduced-motion: reduce)').matches?60:Math.min(60,Math.floor((time-started)/25)),p=flightPoints[i];scene.querySelector('.flight-ball').setAttribute('cx',p[0]);scene.querySelector('.flight-ball').setAttribute('cy',p[1]);if(i<60)frame=requestAnimationFrame(tick);}frame=requestAnimationFrame(tick);},'button primary');parent.append(scene,label,input,out,launch,E('p','small-note',L('Simplified model: same speed, level ground, no wind or air resistance. Real kicks are more complicated.','Modelo simplificado: misma velocidad, suelo plano, sin viento ni resistencia del aire. Las patadas reales son más complicadas.')));draw();question(parent,'angle-test',L('Try 30°, 45°, and 60°. Which goes farthest in THIS model?','Prueba 30°, 45° y 60°. ¿Cuál llega más lejos en ESTE modelo?'),['30°','45°','60°'],1,'');}
+ function camouflage(parent){parent.append(E('h2','',L('Try a camouflage coat','Prueba el camuflaje')));const box=E('div','camouflage-scene');box.innerHTML='<svg viewBox="0 0 320 170" aria-hidden="true"><g class="camo-animal" fill="#e780aa" stroke="#e780aa" stroke-width="9" stroke-linecap="round"><ellipse cx="160" cy="72" rx="31" ry="38"/>'+Array.from({length:8},(_,i)=>'<path d="M'+(140+i*6)+' 92 Q'+(83+i*21)+' 153 '+(64+i*28)+' 118" fill="none"/>').join('')+'<circle cx="149" cy="69" r="4" fill="#18384a" stroke="none"/><circle cx="171" cy="69" r="4" fill="#18384a" stroke="none"/></g></svg>';const text=E('p','lab-readout');parent.append(box);for(const[col,en,es]of [['#9e7856','Sand','Arena'],['#52785b','Seaweed','Algas'],['#657e9b','Rock','Roca']])parent.append(B(L(en,es),()=>{box.style.backgroundColor=col;box.querySelector('.camo-animal').setAttribute('fill',col);box.querySelector('.camo-animal').setAttribute('stroke',col);text.textContent=L('A similar color makes the outline harder to spot.','Un color parecido hace más difícil ver la forma.');}));parent.append(text,E('p','small-note',L('Illustration: a real octopus also changes patterns and skin texture.','Ilustración: un pulpo real también cambia los dibujos y la textura de su piel.')));question(parent,'camouflage-test',L('Which coat would help hide on green seaweed?','¿Qué color ayudaría a esconderse entre algas verdes?'),[L('Bright pink','Rosado brillante'),L('Green','Verde'),L('White spots on black','Blanco sobre negro')],1,'');}
+ function lemonade(){heading(L('Money & Mini Business','Dinero y pequeños negocios'),L('Plan a lemonade stand. Learn what you earn, spend, and keep.','Planea un puesto de limonada. Aprende lo que ganas, gastas y conservas.'));let state=api.get('lemonade',null);if(!state){state={id:api.nextRandom('lemonade',Array.from({length:24},(_,i)=>String(i))),cups:6,price:2,sold:null};api.set('lemonade',state);}const n=+state.id,cost=1,budget=12,hot=n%3===0,rain=n%3===1,visitors=8+(n%4)*2+(hot?6:rain?-2:0);const scene=illustration('lemonade','stand-art');host.append(scene);const panel=E('section','lab-experiment');host.append(panel);panel.append(E('h2','',L('Market day ','Día de mercado ')+(n+1)),E('p','',hot?L('Sunny and hot: expect more thirsty visitors.','Hace sol y calor: espera más visitantes con sed.'):rain?L('Rainy: expect fewer visitors.','Llueve: espera menos visitantes.'):L('A mild day in the neighborhood.','Un día templado en el barrio.')),E('p','',L('Practice budget: $12. Supplies cost $1 per cup. Money here is pretend—it does not spend your learning points.','Presupuesto de práctica: $12. Preparar un vaso cuesta $1. El dinero es imaginario: no gasta tus puntos.')));
+ const form=E('div','stand-controls');for(const[key,en,es,vals]of [['cups','Cups to prepare','Vasos que preparar',[2,4,6,8,10,12]],['price','Price per cup','Precio por vaso',[1,2,3,4]]]){const label=E('label','lab-control-label',L(en,es)),select=E('select');select.id='stand-'+key;label.htmlFor=select.id;vals.forEach(v=>{const opt=E('option','',key==='price'?'$'+v:String(v));opt.value=v;select.append(opt);});select.value=state[key];select.disabled=state.sold!==null;select.onchange=()=>{state[key]=+select.value;api.set('lemonade',state);preview();};form.append(label,select);}const forecast=E('p','lab-readout');function preview(){forecast.textContent=L('Supply cost: $','Costo de preparación: $')+state.cups+L(' · Budget left before sales: $',' · Presupuesto restante antes de vender: $')+(budget-state.cups);}preview();panel.append(form,forecast,E('p','small-note',L('Higher prices may mean fewer buyers. Unsold lemonade is not saved for tomorrow.','Un precio más alto puede atraer menos compradores. La limonada sobrante no se guarda para mañana.')));
+ const results=E('div');const open=B(L('Open my stand →','Abrir mi puesto →'),()=>{if(state.sold!==null)return;state.sold=Math.min(state.cups,Math.max(0,visitors-(state.price-1)*4));api.set('lemonade',state);show();},'button primary');panel.append(open,results);
+ function show(){if(state.sold===null)return;open.disabled=true;form.querySelectorAll('select').forEach(s=>s.disabled=true);results.replaceChildren();const revenue=state.sold*state.price,expense=state.cups*cost,profit=revenue-expense;const ledger=E('dl','stand-ledger');for(const[k,v]of [[L('Cups sold','Vasos vendidos'),state.sold],[L('Unsold cups','Vasos sin vender'),state.cups-state.sold],[L('Sales money','Dinero de ventas'),'$'+revenue],[L('Supply cost','Costo de preparación'),'$'+expense],[L('Profit (sales − cost)','Ganancia (ventas − costo)'),'$'+profit]]){ledger.append(E('dt','',k),E('dd','',String(v)));}results.append(ledger,E('p','',profit<0?L('This day lost money. Try making fewer cups or changing the price next time.','Este día perdió dinero. Prueba preparar menos vasos o cambiar el precio.'):L('Sales are not all profit: first subtract what supplies cost.','No todas las ventas son ganancia: primero resta el costo de preparar.')));question(results,'lemonade:'+n,L('You started with $12. After paying costs and collecting sales, how much money is left?','Empezaste con $12. Después de pagar costos y cobrar ventas, ¿cuánto dinero queda?'),[budget+profit,budget+profit+2,budget+profit+4].map(v=>'$'+v).sort((a,b)=>Number(a.slice(1))-Number(b.slice(1))),0,L('Starting money + profit = money left.','Dinero inicial + ganancia = dinero restante.'));results.append(B(L('Plan a new day →','Planear otro día →'),()=>{api.set('lemonade',null);api.refresh();},'button primary'));}show();
+ }
+ function build(){heading(L('Build It Lab','Laboratorio de construcción'),L('Read the blueprint. Tap squares to place blocks. Tap again to remove them.','Lee el plano. Toca los cuadros para poner bloques. Toca otra vez para quitarlos.'));const shapes=[['001100','001100','011110','011110','111111','110011'],['000000','000000','111111','100001','100001','100001'],['001100','011110','111111','001100','001100','001100'],['000000','000000','001100','001100','011110','111111'],['000000','000000','000000','111111','010010','010010'],['001100','001100','111111','011110','010010','110011'],['000000','100001','110011','111111','111111','111111'],['001000','001100','001110','001111','001000','111111']];
+ const patterns=[],seen=new Set();for(const shape of shapes){let rot=shape;for(let turn=0;turn<4;turn++){const key=rot.join('');if(!seen.has(key)){seen.add(key);patterns.push(rot);}rot=Array.from({length:6},(_,y)=>Array.from({length:6},(_,x)=>rot[5-x][y]).join(''));}}patterns.length=24;
+ let state=api.get('build',null);if(!state){state={id:api.nextRandom('build',Array.from({length:24},(_,i)=>String(i))),cells:[],checked:false};api.set('build',state);}const num=+state.id,pattern=patterns[num];const target=pattern.flatMap((r,y)=>[...r].flatMap((v,x)=>v==='1'?[y*6+x]:[]));const wrap=E('div','build-layout'),plan=E('section'),work=E('section');plan.append(E('h2','',L('Blueprint ','Plano ')+(num+1)));const miniature=E('div','blueprint-grid');miniature.setAttribute('role','img');miniature.setAttribute('aria-label',L('Target block pattern','Patrón de bloques objetivo'));for(let i=0;i<36;i++)miniature.append(E('span',target.includes(i)?'filled':''));plan.append(miniature,E('p','',target.length+' '+L('blocks in the plan','bloques en el plano')));work.append(E('h2','',L('Your workbench','Tu mesa de trabajo')));const grid=E('div','build-grid');grid.setAttribute('role','group');grid.setAttribute('aria-label',L('Six by six building grid','Cuadrícula de seis por seis'));const count=E('p','lab-readout'),status=E('p');status.setAttribute('role','status');function paint(){[...grid.children].forEach((b,i)=>{b.classList.toggle('filled',state.cells.includes(i));b.setAttribute('aria-pressed',String(state.cells.includes(i)));});count.textContent=state.cells.length+' / '+target.length+' '+L('blocks','bloques');}for(let i=0;i<36;i++){const b=B('',()=>{state.cells=state.cells.includes(i)?state.cells.filter(v=>v!==i):[...state.cells,i];state.checked=false;api.set('build',state);status.textContent='';paint();},'build-cell');b.setAttribute('aria-label',L('Row ','Fila ')+(Math.floor(i/6)+1)+L(', column ', ', columna ')+(i%6+1));grid.append(b);}work.append(grid,count,B(L('Check my build','Revisar construcción'),()=>{const matches=state.cells.length===target.length&&target.every(i=>state.cells.includes(i));if(matches){const fresh=reward('build:'+num);state.checked=true;api.set('build',state);status.textContent=L('Blueprint matched!','¡El plano coincide!')+(fresh?' +1 ★':L(' Already earned.',' Ya ganado.'));grid.classList.add('build-success');}else{const missing=target.filter(i=>!state.cells.includes(i)).length,extra=state.cells.filter(i=>!target.includes(i)).length;status.textContent=L('Compare row by row: ','Compara fila por fila: ')+missing+L(' missing, ',' faltan, ')+extra+L(' extra.',' sobran.');}},'button primary'),B(L('Clear blocks','Quitar bloques'),()=>{state.cells=[];state.checked=false;api.set('build',state);paint();status.textContent='';}),status);wrap.append(plan,work);host.append(wrap,E('p','small-note',L('A spatial-design puzzle: match position, shape, and symmetry. This is not a structural-strength simulation.','Un reto de diseño espacial: compara posición, forma y simetría. No simula la resistencia de una estructura.')),B(L('Another blueprint →','Otro plano →'),()=>{api.set('build',null);api.refresh();},'button'));paint();
+ }
+ return ()=>{disposed=true;if(timer)clearTimeout(timer);if(frame)cancelAnimationFrame(frame);};
+}
+window.MLL_LABS={mount,sections,art,lessons:LESSONS};
+window.MLL_HOME_THUMBS=Object.freeze({...window.MLL_HOME_THUMBS,lemonade:art('lemonade'),build:art('build')});
 })();
 
 ;
@@ -4313,7 +5336,7 @@ window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summ
     family=localizeRecords(english.family,[...(window.MLL_ES_FAMILY||[]),...(window.MLL_ES_FAMILY_EXTRA||[]),...(window.MLL_ES_FAMILY_NEW||[])]).map(p=>({...p,family:true}));
     nature=[...localizeRecords(english.a,window.MLL_ES_A),...localizeRecords(english.b,window.MLL_ES_B)];
     surprises=localizeRecords([...(window.MLL_CITIES_A||[]),...(window.MLL_CITIES_B||[])],[...(window.MLL_ES_CITIES_A||[]),...(window.MLL_ES_CITIES_B||[])]);
-    places=[...family,...surprises,...nature];people=localizeRecords(english.people,[...(window.MLL_ES_PEOPLE||[]).map(p=>({...p,...window.MLL_ES_PEOPLE_EXTRA?.[p.id]})),...(window.MLL_MORE_ES_PEOPLE_A||[]),...(window.MLL_MORE_ES_PEOPLE_B||[]),...(window.MLL_ES_MESSI||[])]);byId=new Map(places.map(p=>[p.id,p]));
+    places=[...family,...nature.filter(p=>['faroe','victoria','iceland-lights','maasai-mara'].includes(p.id)),...surprises,...nature.filter(p=>!['faroe','victoria','iceland-lights','maasai-mara'].includes(p.id))];people=localizeRecords(english.people,[...(window.MLL_ES_PEOPLE||[]).map(p=>({...p,...window.MLL_ES_PEOPLE_EXTRA?.[p.id]})),...(window.MLL_MORE_ES_PEOPLE_A||[]),...(window.MLL_MORE_ES_PEOPLE_B||[]),...(window.MLL_ES_MESSI||[])]);byId=new Map(places.map(p=>[p.id,p]));
   }
   loadContent();
   const view = document.getElementById('view');
@@ -4411,7 +5434,7 @@ window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summ
   function heading(kicker,title,description){const row=el('div','page-heading'),text=el('div');text.append(el('p','eyebrow',kicker),el('h1','',title));if(description)text.append(el('p','',description));row.append(text);return row;}
   function topNav(back='#home',label='← Explore the lab'){const n=el('nav','page-nav');n.setAttribute('aria-label',t('Activity navigation'));n.append(link(label,back,'back-link'));if(back!=='#home')n.append(link('⌂ Home','#home','button small ghost'));view.append(n);return n;}
   function toast(text){clearTimeout(toastTimer);$('toast').textContent=t(text);$('toast').classList.add('show');toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3300);}
-  function updateHeader(){ $('brand-name').textContent=l(state.name.toUpperCase()+"'S",state.name.toUpperCase());$('avatar-symbol').textContent=state.badge;$('nav-count').textContent=state.visited.length;const score=$('header-points');if(score){score.textContent='★ '+points();score.setAttribute('aria-label',l(points()+' learning points',points()+' puntos de aprendizaje'));}const total=$('collection-totals');if(total)total.textContent=l(places.length+' places. '+people.length+' remarkable people. Seven learning tools and earned baseball games.',places.length+' lugares. '+people.length+' personas extraordinarias. Siete herramientas de aprendizaje y partidas de béisbol como premio.'); }
+  function updateHeader(){ $('brand-name').textContent=l(state.name.toUpperCase()+"'S",state.name.toUpperCase());$('avatar-symbol').textContent=state.badge;$('nav-count').textContent=state.visited.length;const score=$('header-points');if(score){score.textContent='★ '+baseballBalance();score.setAttribute('aria-label',l(baseballBalance()+' points available',baseballBalance()+' puntos disponibles'));score.title=l('Points available to play','Puntos disponibles para jugar');}const total=$('collection-totals');if(total)total.textContent=l(places.length+' places. '+people.length+' remarkable people. Science discoveries, learning activities, and earned baseball games.',places.length+' lugares. '+people.length+' personas extraordinarias. Descubrimientos científicos, actividades de aprendizaje y béisbol como premio.'); }
   function stopReading(){if('speechSynthesis'in window)window.speechSynthesis.cancel();if(readingButton){readingButton.classList.remove('listen-on');readingButton.textContent=readingButton.dataset.beforeReading||t('◖ Listen');readingButton=null;}}
   let voices=[];function refreshVoices(){if('speechSynthesis' in window)voices=window.speechSynthesis.getVoices();}
   refreshVoices();if('speechSynthesis' in window)window.speechSynthesis.addEventListener('voiceschanged',refreshVoices);
@@ -4455,20 +5478,26 @@ window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summ
     if(scene){const img=picture(scene);img.alt=l('A mystery destination waiting to be discovered','Un destino misterioso por descubrir');b.append(img);}
     const c=el('div','place-card-copy');c.append(el('p','eyebrow',l('50 CITIES · ONE SURPRISE','50 CIUDADES · UNA SORPRESA')),el('h2','',l('Randomizer','Destino sorpresa')),el('p','',l('Where will you go? Tap to find out.','¿Adónde irás? Toca para descubrirlo.')));b.append(c,el('span','card-arrow','→'));return b;
   }
-  function questionBank(){return [...people.flatMap(p=>[p.quiz,p.quiz2].filter(Boolean).map((q,i)=>({...q,id:'person:'+p.id+':'+(i+1),question:p.name+': '+q.question,clue:p.facts.join(' ')}))),...places.flatMap(p=>[p.quiz,p.quiz2].filter(Boolean).map((q,i)=>({...q,id:'place:'+p.id+':'+(i+1),question:p.name+': '+q.question,clue:p.facts.join(' ')})))];}
+  function questionBank(){return [...people.flatMap(p=>[p.quiz,p.quiz2].filter(Boolean).map((q,i)=>({...q,id:'person:'+p.id+':'+(i+1),question:p.name+': '+q.question,clue:p.facts.join(' ')}))),...places.flatMap(p=>[p.quiz,p.quiz2].filter(Boolean).map((q,i)=>({...q,id:'place:'+p.id+':'+(i+1),question:p.name+': '+q.question,clue:p.facts.join(' ')}))),...window.MLL_NEW_LESSONS.map(x=>({id:'practice:lab6:'+x.section+':'+x.id,question:l(x.title[0],x.title[1])+': '+l(x.question[0],x.question[1]),options:l(x.options[0],x.options[1]),answer:x.answer,explain:l(x.options[0],x.options[1])[x.answer]+'.',clue:l(x.facts[0],x.facts[1]).join(' ')}))];}
   function nextHomePlace(){const id=nextRandom('home:places',places.filter(p=>photos[p.id]?.src).map(p=>p.id));state.games.homePlaceLast=id;return byId.get(id);}
   function home(){
     view.classList.add('discovery-home');document.title=l(state.name+"'s Learning Lab",'El laboratorio de '+state.name);
     const featurePool=people.filter(p=>p.id!=='lionel-messi');const personId=nextRandom('home:people',featurePool.map(p=>p.id));const featured=featurePool.find(p=>p.id===personId);const featuredPlace=nextHomePlace();save();
     const paths=el('section','discovery-paths');paths.setAttribute('aria-label',l('Explore the lab','Explora el laboratorio'));
-    const first=link('','#map','discovery-card locations-card');first.dataset.featuredPlace=featuredPlace.id;first.append(picture(featuredPlace,'discovery-photo',false));const c=el('div','discovery-copy');c.append(el('h1','',l('Explore amazing locations','Explora lugares increíbles')),el('strong','featured-name featured-location',featuredPlace.name),el('p','',l('Tap the map. Find your next adventure.','Toca el mapa. Encuentra tu próxima aventura.')));first.append(c,el('span','card-arrow','→'));
-    const second=link('','#people','discovery-card people-feature');second.append(picture(featured,'discovery-photo',false));const pc=el('div','discovery-copy');pc.append(el('h2','',l('Remarkable people','Personas extraordinarias')),el('strong','featured-name',featured.name),el('p','',l('Meet extraordinary people.','Conoce personas extraordinarias.')));second.append(pc,el('span','card-arrow','→'));paths.append(first,second);view.append(paths);
+    const first=link('','#place/'+featuredPlace.id+'?from=home','discovery-card locations-card');first.dataset.featuredPlace=featuredPlace.id;first.append(picture(featuredPlace,'discovery-photo',false));const c=el('div','discovery-copy');c.append(el('h1','',l('Explore amazing locations','Explora lugares increíbles')),el('strong','featured-name featured-location',featuredPlace.name),el('p','',l('Discover this place.','Descubre este lugar.')));first.append(c,el('span','card-arrow','→'));
+    const second=link('','#person/'+featured.id,'discovery-card people-feature');second.dataset.featuredPerson=featured.id;second.append(picture(featured,'discovery-photo',false));const pc=el('div','discovery-copy');pc.append(el('h2','',l('Remarkable people','Personas extraordinarias')),el('strong','featured-name',featured.name),el('p','',l('Discover their story.','Conoce su historia.')));second.append(pc,el('span','card-arrow','→'));paths.append(first,second);view.append(paths);
+    const labs=el('section','lab-home-grid');labs.setAttribute('aria-label',l('More to discover','Más por descubrir'));
+    for(const[id,section]of Object.entries(window.MLL_LABS.sections)){
+      const card=link('','#learn/'+id,'lab-home-card');
+      if(id==='ocean'||id==='animals'){const key=id==='ocean'?'coral':'axolotl',meta=window.MLL_WONDER_PHOTOS[key],im=el('img');im.src=meta.src.replace(/^assets\//,document.documentElement.dataset.assetLayout==='flat'?'':'assets/');im.alt=I.lang==='es'?meta.altEs:meta.alt;im.loading='lazy';card.append(im);}else{const art=el('div','lab-art');art.innerHTML=window.MLL_LABS.art(section[4]);card.append(art);}
+      card.append(el('h2','',l(section[0],section[1])),el('p','',l(section[2],section[3])));labs.append(card);
+    }view.append(labs);
     const practiceHead=el('div','section-head');practiceHead.append(el('h2','',l('Play & learn','Juega y aprende')));view.append(practiceHead);
     const grid=el('div','activity-tiles');
-    for(const[id,en,es]of [['wordsearch','Word Search','Sopa de letras'],['spy','I Spy','Veo, veo'],['hangman','Hangman','Ahorcado'],['math','Math','Matemáticas'],['draw','Draw & Discover','Dibuja y descubre'],['quiz','Quiz','Preguntas'],['spelling','Spelling Bee','Concurso de palabras'],['baseball','Baseball','Béisbol']]){
-      const a=link('','#'+id,'activity-tile activity-'+id),thumb=el('div','activity-thumb');thumb.setAttribute('aria-hidden','true');thumb.innerHTML=window.MLL_HOME_THUMBS?.[id==='wordsearch'&&I.lang==='es'?'wordsearchEs':id]||'';const caption=el('div','activity-caption');caption.append(el('h3','',l(en,es)),el('span','card-arrow','→'));if(id==='baseball')caption.append(el('span','activity-price',state.baseball.active?l('Resume your game','Continúa tu partida'):l('10 points per game','10 puntos por partida')));a.append(thumb,caption);grid.append(a);
+    for(const[id,en,es]of [['wordsearch','Word Search','Sopa de letras'],['spy','I Spy','Veo, veo'],['hangman','Hangman','Ahorcado'],['math','Math','Matemáticas'],['draw','Draw & Discover','Dibuja y descubre'],['quiz','Quiz','Preguntas'],['spelling','Spelling Bee','Concurso de palabras'],['lemonade','Lemonade Stand','Puesto de limonada'],['build','Build It Lab','Construye'],['baseball','Baseball','Béisbol']]){
+      const a=link('',['lemonade','build'].includes(id)?'#learn/'+id:'#'+id,'activity-tile activity-'+id),thumb=el('div','activity-thumb');thumb.setAttribute('aria-hidden','true');thumb.innerHTML=window.MLL_HOME_THUMBS?.[id==='wordsearch'&&I.lang==='es'?'wordsearchEs':id]||'';const caption=el('div','activity-caption');caption.append(el('h3','',l(en,es)),el('span','card-arrow','→'));if(id==='baseball')caption.append(el('span','activity-price',state.baseball.active?l('Resume your game','Continúa tu partida'):l('10 points per game','10 puntos por partida')));a.append(thumb,caption);grid.append(a);
     }view.append(grid);
-    const progress=el('details','home-progress'),summary=el('summary','',l('My learning scoreboard','Mi marcador de aprendizaje'));progress.append(summary);const board=el('section','scoreboard');const main=el('div','score-main');main.append(el('strong','score-value',String(points())),el('span','score-label',l('LEARNING POINTS','PUNTOS DE APRENDIZAJE')));board.append(main);for(const[value,label]of [[state.answers.length,l('Answers discovered','Respuestas descubiertas')],[people.filter(personDone).length+' / '+people.length,l('People completed','Personas completadas')],[state.visited.length+' / '+places.length,l('Places explored','Lugares explorados')]]){const stat=el('div','score-stat');stat.append(el('strong','',String(value)),el('span','',label));board.append(stat);}progress.append(board,el('p','small-note',l(state.completedTasks.length+' puzzles & drawings completed. Progress stays on this device.',state.completedTasks.length+' rompecabezas y dibujos completados. El progreso se guarda en este dispositivo.')));progress.append(el('p','small-note score-spendable',l(baseballBalance()+' points available for baseball. '+state.baseball.spent+' used to play. Your total learning score stays above.',baseballBalance()+' puntos disponibles para béisbol. '+state.baseball.spent+' usados para jugar. Tu puntaje total de aprendizaje se mantiene arriba.')));view.append(progress);
+    const progress=el('details','home-progress'),summary=el('summary','',l('My learning scoreboard','Mi marcador de aprendizaje'));progress.append(summary);const board=el('section','scoreboard');const main=el('div','score-main');main.append(el('strong','score-value',String(points())),el('span','score-label',l('LIFETIME LEARNING POINTS','TOTAL DE PUNTOS GANADOS')));board.append(main);for(const[value,label]of [[state.answers.length,l('Answers discovered','Respuestas descubiertas')],[people.filter(personDone).length+' / '+people.length,l('People completed','Personas completadas')],[state.visited.length+' / '+places.length,l('Places explored','Lugares explorados')]]){const stat=el('div','score-stat');stat.append(el('strong','',String(value)),el('span','',label));board.append(stat);}progress.append(board,el('p','small-note',l(state.completedTasks.length+' puzzles & drawings completed. Progress stays on this device.',state.completedTasks.length+' rompecabezas y dibujos completados. El progreso se guarda en este dispositivo.')));progress.append(el('p','small-note score-spendable',l(baseballBalance()+' points available for baseball. '+state.baseball.spent+' used to play. Your total learning score stays above.',baseballBalance()+' puntos disponibles para béisbol. '+state.baseball.spent+' usados para jugar. Tu puntaje total de aprendizaje se mantiene arriba.')));view.append(progress);
   }
   function locationGallery(){
     const section=el('section','location-directory'),title=el('div','section-head');title.append(el('h2','',l('Pick your next adventure','Elige tu próxima aventura')));section.append(title);
@@ -4503,7 +5532,7 @@ window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summ
     wrap.append(credit);show(0);return wrap;
   }
   function profile(p,from){
-    markVisited(p.id);document.title=p.name+' · '+l(state.name+"'s Lab", "El laboratorio de "+state.name);const back=from==='map'?'#map':from==='passport'?'#passport':from==='home'?'#home':'#places';topNav(back,from==='map'?'← Back to the map':from==='passport'?'← My passport':from==='home'?'← Explore the lab':'← All places');
+    markVisited(p.id);document.title=p.name+' · '+l(state.name+"'s Lab", "El laboratorio de "+state.name);const back=from==='map'?'#map':from==='passport'?'#passport':from==='home'?'#home':'#places';const nav=topNav(back,from==='map'?'← Back to the map':from==='passport'?'← My passport':from==='home'?'← Explore the lab':'← All places');if(from!=='map')nav.append(link(l('World map →','Mapa del mundo →'),'#map?focus='+p.id,'button small ghost'));
     const grid=el('div','profile-layout'),visual=el('div');visual.append(photoGallery(p));
     const mini=el('div','mini-map');if(window.MLL_MAP?.mini){const rendered=MLL_MAP.mini(p);if(typeof rendered==='string')mini.innerHTML=rendered;else if(rendered)mini.append(rendered);}else{mini.append(el('p','','📍 '+p.name+' · '+p.country));}mini.append(link('Find it on the world map ↗','#map?focus='+p.id,'mini-map-label'));visual.append(mini);
     if(p.familyStops){const stops=el('section','family-stops');stops.append(el('h3','','Your family trail'));p.familyStops.forEach(s=>stops.append(el('p','',s.name+', '+s.state+' — '+s.connection)));stops.append(link('See the family pins ↗','#map?filter=family','button small ghost'));visual.append(stops);}
@@ -4582,7 +5611,7 @@ window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summ
     const lobby=el('section','ballpark-lobby');
     const preview=el('div','ballpark-preview');preview.setAttribute('aria-hidden','true');preview.innerHTML=window.MLL_BASEBALL_THUMB||'';
     const copy=el('div','ballpark-entry');copy.append(el('p','eyebrow',l('THE LEARNING LEAGUE','LA LIGA DEL APRENDIZAJE')),el('h1','',l(state.name+'’s Ballpark','El estadio de '+state.name)),el('p','ballpark-lead',l('You did the learning. Now step up to the plate.','Aprendiste algo nuevo. Ahora, ¡a batear!')));
-    const rules=el('ul','ballpark-rules');for(const text of [l('Time your swing as the ball reaches home plate.','Batea cuando la pelota llegue al plato.'),l('Play 3 innings. Three outs end your turn.','Juega 3 entradas. Tres outs terminan tu turno.'),l('Five runs end a turn, too. The other team bats automatically.','Cinco carreras también terminan el turno. El otro equipo batea automáticamente.')])rules.append(el('li','',text));copy.append(rules);
+    const rules=el('ul','ballpark-rules');for(const text of [l('Time your swing as the ball reaches home plate.','Batea cuando la pelota llegue al plato.'),l('Play 3 innings. Three outs end your turn.','Juega 3 entradas. Tres outs terminan tu turno.'),l('Choose Easy, Medium, or Hard. The other team bats automatically after your three outs.','Elige Fácil, Medio o Difícil. El otro equipo batea automáticamente después de tus tres outs.')])rules.append(el('li','',text));copy.append(rules);
     const balance=el('div','ballpark-balance');balance.append(el('strong','',String(baseballBalance())),el('span','',l('points available to play','puntos disponibles para jugar')));copy.append(balance);
     if(!window.MLL_BASEBALL){copy.append(el('p','',l('The game is still loading. Refresh the page to try again.','El juego todavía está cargando. Actualiza la página para intentarlo otra vez.')));}
     else if(state.baseball.active){
@@ -4611,13 +5640,15 @@ window.MLL_BASEBALL={mount,engine:{create,normalize,timingOutcome,applyPlay,summ
     const list=el('div','credits-grid');
     [...places,...people].forEach(p=>{const photo=photos[p.id];if(!photo)return;const a=el('article');a.id='credit-'+p.id;a.append(picture(p));const copy=el('div');copy.append(el('h2','',p.name),el('p','',(I.lang==='es'?photoEs[p.id]:null)||photo.alt));const credit=el('p');credit.append(document.createTextNode(l('Image','Imagen')+': '+creditText(photo.credit)+' · '),external(l('Original image','Imagen original'),photo.source),document.createTextNode(' · '),external(creditText(photo.license),photo.licenseUrl||photo.source));copy.append(credit,el('p','','Fact sources'));const sources=el('ul');(p.sources||[]).forEach(source=>{const li=el('li');li.append(external(source.title,source.url));sources.append(li);});copy.append(sources);a.append(copy);list.append(a);});view.append(list);
     for(const p of places)for(const photo of galleries[p.id]||[]){const a=el('article'),img=el('img');img.src=photo.src;img.alt=I.lang==='es'?(photo.altEs||photo.alt):photo.alt;img.loading='lazy';const copy=el('div');copy.append(el('h2','',p.name),el('p','',img.alt));const line=el('p');line.append(document.createTextNode(creditText(photo.credit)+' · '),external(l('Original image','Imagen original'),photo.source),document.createTextNode(' · '),external(creditText(photo.license),photo.licenseUrl||photo.source));copy.append(line);a.append(img,copy);list.append(a);}
+    for(const key of ['coral','axolotl','octopus','cheetah','elephant','owl','bat','turtle']){const photo=window.MLL_WONDER_PHOTOS[key],a=el('article'),img=el('img');img.src=photo.src.replace(/^assets\//,document.documentElement.dataset.assetLayout==='flat'?'':'assets/');img.alt=I.lang==='es'?photo.altEs:photo.alt;img.loading='lazy';const copy=el('div');copy.append(el('h2','',img.alt),el('p','',photo.title));const line=el('p');line.append(document.createTextNode(photo.credit+' · '),external(l('Original image','Imagen original'),photo.source),document.createTextNode(' · '),external(photo.license,photo.licenseUrl||photo.source));copy.append(line);a.append(img,copy);list.append(a);}
     const mapNote=el('section','quiz-card');mapNote.append(el('h2','','World map'));const text=el('p');text.append(document.createTextNode(l('Land outlines: ','Contornos de la tierra: ')),external('Natural Earth','https://www.naturalearthdata.com/about/terms-of-use/'),document.createTextNode(l(', public domain. This flat projection stretches shapes near the poles. Location pins are approximate.',', dominio público. Esta proyección plana estira las formas cerca de los polos. Los puntos de ubicación son aproximados.')));mapNote.append(text,el('h2','',l('Learning activities & artwork','Actividades de aprendizaje e ilustraciones')),el('p','',l('Practice activities are original code. The Max rocket emblem is an AI-generated illustration, not a historical image. Historical portraits retain the credits and licenses listed above; later imagined portraits are identified in their image descriptions.','Las actividades son código original. El emblema del cohete de Max es una ilustración generada con IA, no una imagen histórica. Los retratos conservan los créditos y licencias de arriba; los retratos imaginados después se identifican en sus descripciones.')));view.append(mapNote);
   }
 
+  function labPage(path){dispose=window.MLL_LABS.mount(view,path,{lang:I.lang,nextRandom,answer,get:(key,fallback)=>state.games['lab6:'+key]??fallback,set:(key,value)=>{state.games['lab6:'+key]=value;save();},refresh:()=>route()});}
   function route(){routeToken++;stopReading();dismissCelebration();if(dispose){dispose();dispose=null;}view.className='';view.replaceChildren();const raw=location.hash.slice(1)||'home',parts=raw.split('?'),path=parts[0].split('/'),query=new URLSearchParams(parts[1]||'');const page=path[0];document.querySelectorAll('[data-nav]').forEach(a=>{const active=a.dataset.nav===(page==='place'?(query.get('from')==='map'?'map':'home'):page==='map'?'map':page==='passport'?'passport':'home');if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});document.title=l(state.name+"'s Learning Lab", "El laboratorio de "+state.name);
     if(page==='place'&&byId.has(path[1]))profile(byId.get(path[1]),query.get('from'));
     else if(page==='person'&&people.some(p=>p.id===path[1]))person(people.find(p=>p.id===path[1]));
-    else if(page==='baseball')baseballPage(path[1]==='play');else if(page==='credits')creditsPage();else if(page==='places')placeMenu();else if(page==='map')mapPage(query);else if(page==='passport')passport();else if(page==='people')peopleMenu();else if(['spy','draw','wordsearch'].includes(page))challenge(page);else if(['math','quiz','spelling','hangman'].includes(page))practice(page);else home();
+    else if(page==='learn')labPage(path);else if(page==='baseball')baseballPage(path[1]==='play');else if(page==='credits')creditsPage();else if(page==='places')placeMenu();else if(page==='map')mapPage(query);else if(page==='passport')passport();else if(page==='people')peopleMenu();else if(['spy','draw','wordsearch'].includes(page))challenge(page);else if(['math','quiz','spelling','hangman'].includes(page))practice(page);else home();
     preserveActivitySelection=false;window.scrollTo(0,0);view.focus({preventScroll:true});
   }
   function renderVoiceSettings(){
